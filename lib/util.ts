@@ -3,7 +3,8 @@
 export const cToF = (c: number): number => (c * 9) / 5 + 32;
 export const mToFt = (m: number): number => m * 3.280839895;
 export const msToMph = (ms: number): number => ms * 2.236936;
-export const knotsToMph = (kt: number): number => kt * 1.150779;
+// Boaters speak knots: mph ÷ 1.150779 (storage stays mph, display converts).
+export const mphToKnots = (mph: number): number => mph / 1.150779;
 export const kmhToMph = (kmh: number): number => kmh * 0.621371;
 
 export const round = (n: number, decimals = 0): number => {
@@ -61,12 +62,6 @@ export function angularDistance(a: number, b: number): number {
   return d > 180 ? 360 - d : d;
 }
 
-/** Triangular comfort curve: 100 at `ideal`, falling linearly to 0 at +/- `spread`. */
-export function triangular(value: number, ideal: number, spread: number): number {
-  const d = Math.abs(value - ideal);
-  return clamp(100 * (1 - d / spread), 0, 100);
-}
-
 /**
  * Plateau curve: 100 across [idealLow, idealHigh], decaying linearly to 0 over
  * `falloff` units on each side. Good for "comfortable range" inputs.
@@ -121,7 +116,7 @@ export async function fetchWithTimeout(
       headers: {
         "User-Agent":
           process.env.CONDITIONS_USER_AGENT ??
-          "boca-beach-rats (https://github.com/)",
+          "isitboatday (https://github.com/jayfrid-bot/isitboatday)",
         ...(rest.headers ?? {}),
       },
     } as RequestInit);

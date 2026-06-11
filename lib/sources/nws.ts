@@ -1,7 +1,8 @@
-import type { Location, NwsAlert, NwsData, RipRisk, Wrapped } from "@/lib/types";
+import type { Location, NwsAlert, NwsData, Wrapped } from "@/lib/types";
 import { fetchWithTimeout, fetchedAtOf, nowIso, oldestIso } from "@/lib/util";
 
 const ATTRIBUTION = "NOAA/NWS (api.weather.gov)";
+const SOURCE = "NWS (land + marine zone alerts)";
 
 // --- pure parsers ----------------------------------------------------------
 interface AlertsJson {
@@ -29,72 +30,79 @@ export function parseAlerts(json: AlertsJson): NwsAlert[] {
     }));
 }
 
-/**
- * Pull today's rip-current risk for a zone out of a Surf Zone Forecast (SRF)
- * product. The product is split into per-zone segments by `$$`; within the
- * matching zone the first "Rip Current Risk*....High/Moderate/Low" is today's.
- */
-export function parseRipRisk(productText: string, zone: string): RipRisk {
-  const escaped = zone.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const seg = productText
-    .split("$$")
-    .find((s) => new RegExp(escaped, "i").test(s) && /Rip Current Risk/i.test(s));
-  if (!seg) return "unknown";
-  const m = seg.match(/Rip Current Risk[\s*.:]*\b(Low|Moderate|High)\b/i);
-  return m ? (m[1].toLowerCase() as RipRisk) : "unknown";
-}
-
 // --- fetch -----------------------------------------------------------------
-async function fetchRipRisk(
-  office: string,
-  zone: string,
-): Promise<{ risk: RipRisk; at?: string }> {
+/**
+ * Fetch one active-alerts feed and parse it. Returns the parsed list plus an
+ * `ok` flag and the response timestamp so the caller can tell which of the two
+ * feeds (land point vs marine zone) succeeded without anything throwing.
+ */
+async function fetchAlertsFeed(
+  url: string,
+): Promise<{ alerts: NwsAlert[]; ok: boolean; at?: string }> {
   try {
-    const list = await fetchWithTimeout(
-      `https://api.weather.gov/products/types/SRF/locations/${office}`,
-      { timeoutMs: 7000, next: { revalidate: 3600 } },
-    );
-    if (!list.ok) return { risk: "unknown" };
-    const graph = ((await list.json())["@graph"] ?? []) as { id?: string }[];
-    if (!graph.length || !graph[0].id) return { risk: "unknown" };
-    const prod = await fetchWithTimeout(
-      `https://api.weather.gov/products/${graph[0].id}`,
-      { timeoutMs: 7000, next: { revalidate: 3600 } },
-    );
-    if (!prod.ok) return { risk: "unknown" };
-    return {
-      risk: parseRipRisk((await prod.json()).productText ?? "", zone),
-      at: fetchedAtOf(prod),
-    };
+    const res = await fetchWithTimeout(url, {
+      timeoutMs: 7000,
+      next: { revalidate: 900 }, // 15m — alerts change
+    });
+    if (!res.ok) return { alerts: [], ok: false };
+    return { alerts: parseAlerts(await res.json()), ok: true, at: fetchedAtOf(res) };
   } catch {
-    return { risk: "unknown" };
+    return { alerts: [], ok: false };
   }
 }
 
 export async function fetchNws(loc: Location): Promise<Wrapped<NwsData>> {
   const fetchedAt = nowIso();
-  const sz = loc.surfZone;
   try {
-    const [alertsRes, rip] = await Promise.all([
-      fetchWithTimeout(
-        `https://api.weather.gov/alerts/active?point=${loc.lat},${loc.lon}`,
-        { timeoutMs: 7000, next: { revalidate: 900 } }, // 15m — alerts change
+    // Land-point alerts (hurricane warnings etc.) and offshore marine-zone
+    // alerts (Small Craft Advisory, Gale Warning, Special Marine Warning, marine
+    // Dense Fog Advisory) fetched in parallel — the marine zone is the boating
+    // safety authority for offshore conditions.
+    const [land, marine] = await Promise.all([
+      fetchAlertsFeed(`https://api.weather.gov/alerts/active?point=${loc.lat},${loc.lon}`),
+      fetchAlertsFeed(
+        `https://api.weather.gov/alerts/active?zone=${loc.nwsMarineZoneId}`,
       ),
-      sz
-        ? fetchRipRisk(sz.office, sz.name)
-        : Promise.resolve<{ risk: RipRisk; at?: string }>({ risk: "unknown" }),
     ]);
-    const alerts = alertsRes.ok ? parseAlerts(await alertsRes.json()) : [];
+
+    const data: NwsData = { alerts: land.alerts, marineAlerts: marine.alerts };
+
+    // If exactly one feed failed we still have useful data — report best-effort
+    // with a note rather than dropping the whole source.
+    if (land.ok !== marine.ok) {
+      const failed = land.ok ? "marine-zone" : "land-point";
+      return {
+        source: SOURCE,
+        status: "best-effort",
+        fetchedAt: oldestIso(land.at, marine.at),
+        attribution: ATTRIBUTION,
+        data,
+        note: `${failed} alerts unavailable; showing the other`,
+      };
+    }
+
+    // Both failed: surface an error with no data.
+    if (!land.ok && !marine.ok) {
+      return {
+        source: SOURCE,
+        status: "error",
+        fetchedAt,
+        attribution: ATTRIBUTION,
+        data: null,
+        note: "alerts unavailable",
+      };
+    }
+
     return {
-      source: "NWS (alerts + Surf Zone Forecast)",
+      source: SOURCE,
       status: "ok",
-      fetchedAt: oldestIso(alertsRes.ok ? fetchedAtOf(alertsRes) : undefined, rip.at),
+      fetchedAt: oldestIso(land.at, marine.at),
       attribution: ATTRIBUTION,
-      data: { alerts, ripCurrentRisk: rip.risk },
+      data,
     };
   } catch (e) {
     return {
-      source: "NWS (alerts + Surf Zone Forecast)",
+      source: SOURCE,
       status: "error",
       fetchedAt,
       attribution: ATTRIBUTION,

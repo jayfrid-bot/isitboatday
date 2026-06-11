@@ -4,11 +4,11 @@ import type { CapacitorConfig } from "@capacitor/cli";
 // reach the app instantly with no App Store resubmission. `webDir` is only a
 // tiny offline fallback page (mobile/www) shown if the remote can't load.
 const config: CapacitorConfig = {
-  appId: "com.isitbeachday.app",
-  appName: "Is It Beach Day",
+  appId: "com.isitboatday.app",
+  appName: "Is It Boat Day",
   webDir: "mobile/www",
   server: {
-    url: "https://isitbeachday.com",
+    url: "https://isitboatday.com",
   },
   ios: {
     contentInset: "automatic",

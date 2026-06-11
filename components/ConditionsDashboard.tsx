@@ -3,28 +3,20 @@
 import Link from "next/link";
 import useSWR from "swr";
 import type { ConditionsResponse } from "@/lib/types";
-import { bestBeachWindow, deriveMetrics } from "@/lib/score";
-import { beachDayVerdict, fmtDate, fmtTime, scoreColor } from "@/lib/format";
+import { bestBoatWindow, deriveMetrics } from "@/lib/score";
+import { boatDayVerdict, fmtDate, fmtTime, scoreColor } from "@/lib/format";
+import { mphToKnots, round } from "@/lib/util";
 import { Logo } from "@/components/Logo";
 import { ScoreGauge } from "@/components/ScoreGauge";
 import { ScoreBreakdown } from "@/components/ScoreBreakdown";
 import { HourlyScoreGraph } from "@/components/HourlyScoreGraph";
-import { AirQualityMeter } from "@/components/AirQualityMeter";
 import { LightningCard } from "@/components/LightningCard";
-import {
-  BusynessByHourChart,
-  BusynessByDayChart,
-  SeaweedByHourChart,
-  SeaweedByDayChart,
-} from "@/components/HistoryCharts";
 import { MetricCard } from "@/components/MetricCard";
 import { WindCompass } from "@/components/WindCompass";
 import { TidePanel } from "@/components/TidePanel";
 import { SunPanel } from "@/components/SunPanel";
 import { MoonPanel } from "@/components/MoonPanel";
 import { SafetyBanner } from "@/components/SafetyBanner";
-import { SandTempPanel } from "@/components/SandTempPanel";
-import { sandVerdict } from "@/lib/sandTemp";
 import { SourceList } from "@/components/SourceBadge";
 import { CamGrid } from "@/components/CamGrid";
 import { ForecastStrip } from "@/components/ForecastStrip";
@@ -74,42 +66,26 @@ export function ConditionsDashboard({
   const d = deriveMetrics(snap);
   const tz = snap.location.timezone;
   const cams = res.cams;
-  const ratings = snap.cityOfficial.data;
-  const sg = snap.sargassum.data;
-  const busy = snap.busyness.data;
   const traffic = snap.traffic.data;
-  const rip = snap.nws.data?.ripCurrentRisk;
   const nc = snap.nowcast.data;
-  const bw = bestBeachWindow(res.hourlyScores);
-  // Bound the by-hour charts to daylight: local hour of sunrise / sunset.
-  const localHour = (iso?: string) => {
-    if (!iso) return undefined;
-    const h = Number(
-      new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "2-digit", hour12: false }).format(
-        new Date(iso),
-      ),
-    );
-    return Number.isFinite(h) ? h % 24 : undefined;
-  };
-  const sunriseHour = localHour(snap.sun.data?.sunrise);
-  const sunsetHour = localHour(snap.sun.data?.sunset);
+  const bw = bestBoatWindow(res.hourlyScores);
   const uvBurn =
     d.uvIndex != null && d.uvIndex >= 1 ? Math.round(200 / d.uvIndex) : undefined;
   const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
+
+  // Wind is the hero. Boaters speak knots, so lead with knots and keep mph small.
+  // Internal storage stays mph (imperial-in-adapters); mphToKnots lives in util.
+  const windKn = d.windSpeedMph != null ? round(mphToKnots(d.windSpeedMph)) : undefined;
+  const gustKn = d.windGustMph != null ? round(mphToKnots(d.windGustMph)) : undefined;
 
   const sources = [
     snap.weather,
     snap.buoy,
     snap.tides,
     snap.marine,
-    snap.cityOfficial,
-    snap.waterQuality,
     snap.nowcast,
     snap.nws,
-    snap.airQuality,
     snap.lightning,
-    snap.sargassum,
-    snap.busyness,
     snap.traffic,
     snap.forecast,
     snap.sun,
@@ -122,7 +98,7 @@ export function ConditionsDashboard({
         <Link
           href="/"
           className="inline-flex min-h-[36px] items-center text-sm hover:opacity-80"
-          aria-label="Is It Beach Day — all beaches"
+          aria-label="Is It Boat Day — all boating towns"
         >
           <Logo markSize={28} />
         </Link>
@@ -133,46 +109,28 @@ export function ConditionsDashboard({
       </header>
 
       <div className="mb-6">
-        <SafetyBanner
-          city={snap.cityOfficial}
-          water={snap.waterQuality}
-          lightning={snap.lightning}
-          nws={snap.nws}
-        />
+        <SafetyBanner nws={snap.nws} lightning={snap.lightning} />
       </div>
 
       <section className="mb-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
         <div className="flex flex-col items-center gap-4 rounded-2xl bg-slate-900/70 p-6 ring-1 ring-white/10">
           <div className="text-center">
             <div className="text-xs uppercase tracking-widest text-slate-500">
-              Is it beach day?
+              Is it boat day?
             </div>
             <div
               className="text-2xl font-bold"
               style={{ color: scoreColor(active.score) }}
             >
-              {beachDayVerdict(active.score)}
+              {boatDayVerdict(active.score)}
             </div>
           </div>
           <ScoreGauge
             score={active.score}
             rating={active.rating}
-            label="Beach Day score"
+            label="Boat Day score"
             accent={scoreColor(active.score)}
           />
-          {ratings &&
-          (ratings.swimmingRating || ratings.surfingRating || ratings.snorkelingRating) ? (
-            <div className="text-center text-xs text-slate-400">
-              Lifeguard rating:{" "}
-              {[
-                ratings.swimmingRating && `swim ${ratings.swimmingRating}`,
-                ratings.snorkelingRating && `snorkel ${ratings.snorkelingRating}`,
-                ratings.surfingRating && `surf ${ratings.surfingRating}`,
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            </div>
-          ) : null}
         </div>
         <ScoreBreakdown result={active} />
       </section>
@@ -199,15 +157,39 @@ export function ConditionsDashboard({
       </section>
 
       <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        <div className="rounded-2xl bg-slate-900/70 p-4 ring-1 ring-white/10">
+        {/* Wind — the hero card, knots first. Spans two columns to give it weight. */}
+        <div className="col-span-2 rounded-2xl bg-slate-900/70 p-4 ring-1 ring-white/10">
           <div className="flex items-center gap-2 text-sm text-slate-400">
             <span aria-hidden>💨</span>
             <span>Wind</span>
           </div>
-          <div className="mt-2">
+          <div className="mt-2 flex items-center gap-3">
             <WindCompass fromDeg={d.windDirDeg} speedMph={d.windSpeedMph} />
+            <div>
+              <div className="text-2xl font-semibold text-white sm:text-3xl">
+                {windKn != null ? `${windKn} kn` : "—"}
+              </div>
+              {d.windSpeedMph != null ? (
+                <div className="text-xs text-slate-400">{d.windSpeedMph} mph</div>
+              ) : null}
+              {gustKn != null ? (
+                <div className="text-xs text-slate-400">gusts {gustKn} kn</div>
+              ) : null}
+            </div>
           </div>
         </div>
+        <MetricCard
+          icon="〰️"
+          label="Sea state"
+          value={d.waveHeightFt != null ? `${d.waveHeightFt} ft` : "—"}
+          sub={
+            d.waveHeightFt != null && d.wavePeriodS != null
+              ? `${d.waveHeightFt} ft @ ${d.wavePeriodS} s`
+              : d.wavePeriodS != null
+                ? `${d.wavePeriodS} s period`
+                : undefined
+          }
+        />
         <MetricCard
           icon="🌡️"
           label="Water temp"
@@ -218,6 +200,18 @@ export function ConditionsDashboard({
           label="Air temp"
           value={d.airTempF != null ? `${d.airTempF}°F` : "—"}
           sub={d.shortForecast}
+        />
+        <MetricCard
+          icon="🌫️"
+          label="Visibility"
+          value={d.visibilityMi != null ? `${d.visibilityMi} mi` : "—"}
+          sub={
+            d.visibilityMi != null && d.visibilityMi < 2
+              ? "fog risk"
+              : d.visibilityMi != null
+                ? "clear sightlines"
+                : undefined
+          }
         />
         <MetricCard
           icon="💧"
@@ -232,17 +226,12 @@ export function ConditionsDashboard({
           sub={dewComfort(d.dewPointF)}
         />
         <MetricCard
-          icon="〰️"
-          label="Sea state"
-          value={d.waveHeightFt != null ? `${d.waveHeightFt} ft` : "—"}
-        />
-        <MetricCard
           icon="🔆"
           label="UV index"
           value={d.uvIndex != null ? `${d.uvIndex}` : "—"}
           sub={
             uvBurn != null
-              ? `~${uvBurn} min to burn`
+              ? `~${uvBurn} min to burn — no shade out there`
               : d.uvIndex != null
                 ? "minimal burn risk"
                 : undefined
@@ -263,65 +252,16 @@ export function ConditionsDashboard({
           }
         />
         <MetricCard
-          icon="🦶"
-          label="Sand temp (est.)"
-          value={d.sandTempF != null ? `~${d.sandTempF}°F` : "—"}
-          sub={d.sandTempF != null ? sandVerdict(d.sandTempF).advice : undefined}
-        />
-        <MetricCard
-          icon="🧫"
-          label="Water quality"
-          value={
-            d.waterRating === "unknown"
-              ? "—"
-              : d.waterRating[0].toUpperCase() + d.waterRating.slice(1)
-          }
-          sub={d.waterAdvisory ? "advisory in effect" : undefined}
-        />
-        <MetricCard
-          icon="🪸"
-          label="Seaweed (sargassum)"
-          value={!sg || sg.level === "unknown" ? "—" : cap(sg.level)}
-          sub={
-            sg
-              ? `📷 ${sg.isMorning ? "AM cams (pre-clean)" : "cams"}` +
-                (sg.coveragePct != null ? ` · ~${sg.coveragePct}% covered` : "") +
-                (sg.note ? ` — ${sg.note}` : "")
-              : undefined
-          }
-        />
-        <MetricCard
-          icon="👥"
-          label="Beach busyness"
-          value={!busy || busy.level === "unknown" ? "—" : cap(busy.level)}
-          sub={
-            busy && busy.level !== "unknown"
-              ? [
-                  busy.peopleEstimate != null ? `~${busy.peopleEstimate} people` : busy.note,
-                  busy.crowdPct != null ? `~${busy.crowdPct}% full` : undefined,
-                ]
-                  .filter(Boolean)
-                  .join(" · ") || undefined
-              : undefined
-          }
-        />
-        <MetricCard
-          icon="🚗"
-          label="Traffic"
+          icon="⚓"
+          label="Ramp & marina traffic"
           value={!traffic || traffic.level === "unknown" ? "—" : cap(traffic.level)}
           sub={
             traffic && traffic.level !== "unknown"
               ? traffic.congestion != null
-                ? `${traffic.congestion}% congestion near the beach`
-                : "near the beach"
+                ? `${traffic.congestion}% congestion near the waterfront`
+                : "near the waterfront"
               : undefined
           }
-        />
-        <MetricCard
-          icon="🌊"
-          label="Rip current risk"
-          value={!rip || rip === "unknown" ? "—" : cap(rip)}
-          sub={rip && rip !== "unknown" ? "NWS Surf Zone Forecast" : undefined}
         />
         {d.precipProbability != null ? (
           <MetricCard
@@ -332,52 +272,18 @@ export function ConditionsDashboard({
         ) : null}
       </section>
 
-      {snap.hourly.data?.length ? (
-        <section className="mb-6">
-          <SandTempPanel
-            hours={snap.hourly.data}
-            sunriseIso={snap.sun.data?.sunrise}
-            sunsetIso={snap.sun.data?.sunset}
-            tz={tz}
-          />
-        </section>
-      ) : null}
-
       <section className="mb-6 grid gap-4 sm:grid-cols-2">
-        <AirQualityMeter air={snap.airQuality} />
         <LightningCard lightning={snap.lightning} />
       </section>
 
-      {busy?.byHour?.length ||
-      busy?.byDay?.length ||
-      sg?.byHour?.length ||
-      sg?.byDay?.length ? (
-        <section className="mb-6 grid gap-6 lg:grid-cols-2">
-          {busy?.byHour?.length ? (
-            <BusynessByHourChart
-              byHour={busy.byHour}
-              tz={tz}
-              sunriseHour={sunriseHour}
-              sunsetHour={sunsetHour}
-            />
-          ) : null}
-          {busy?.byDay?.length ? <BusynessByDayChart byDay={busy.byDay} tz={tz} /> : null}
-          {sg?.byHour?.length ? (
-            <SeaweedByHourChart
-              byHour={sg.byHour}
-              tz={tz}
-              sunriseHour={sunriseHour}
-              sunsetHour={sunsetHour}
-            />
-          ) : null}
-          {sg?.byDay?.length ? <SeaweedByDayChart byDay={sg.byDay} tz={tz} /> : null}
-        </section>
-      ) : null}
-
       <section className="mb-6 grid gap-4 sm:grid-cols-2">
-        <TidePanel tides={snap.tides} tz={tz} />
+        <TidePanel tides={snap.tides} weather={snap.weather} buoy={snap.buoy} tz={tz} />
         <SunPanel sun={snap.sun} tz={tz} />
         <MoonPanel sun={snap.sun} />
+      </section>
+
+      <section className="mb-6">
+        <ForecastStrip forecast={snap.forecast} />
       </section>
 
       <section className="mb-8">
@@ -387,16 +293,17 @@ export function ConditionsDashboard({
       <footer className="space-y-3">
         <SourceList sources={sources} />
         <p className="text-center text-xs text-slate-500">
-          Composite scores are an automated estimate for general guidance only —
-          not a safety determination. Always follow posted flags and lifeguards.
+          Scores are an automated estimate for general guidance only — not a
+          safety determination. Check the official NWS marine forecast and use
+          your own judgment as captain.
         </p>
         <p className="text-center text-xs text-slate-500">
           Spot something off or have an idea?{" "}
           <a
-            href="mailto:hello@isitbeachday.com"
+            href="mailto:hello@isitboatday.com"
             className="text-ocean-300 hover:underline"
           >
-            hello@isitbeachday.com
+            hello@isitboatday.com
           </a>
         </p>
         <p className="text-center text-xs text-slate-500">

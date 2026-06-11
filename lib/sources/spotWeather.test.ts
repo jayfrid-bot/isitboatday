@@ -15,6 +15,7 @@ const FIXTURE = {
     wind_speed_10m: 8.3,
     wind_direction_10m: 114,
     wind_gusts_10m: 10.7,
+    visibility: 2414, // meters
   },
 };
 
@@ -31,6 +32,7 @@ describe("parseOpenMeteoCurrent", () => {
     expect(d.dewPointF).toBe(78);
     expect(d.weatherCode).toBe(95);
     expect(d.shortForecast).toBe("Thunderstorm");
+    expect(d.visibilityMi).toBe(1.5); // 2414 m / 1609.344, rounded to 1 dp
     expect(d.observedAt).toBe("2026-05-29T18:15:00.000Z");
   });
 
@@ -44,6 +46,7 @@ describe("parseOpenMeteoCurrent", () => {
     expect(d.airTempF).toBe(80);
     expect(d.windSpeedMph).toBeUndefined();
     expect(d.windDirCardinal).toBeUndefined();
+    expect(d.visibilityMi).toBeUndefined();
   });
 });
 

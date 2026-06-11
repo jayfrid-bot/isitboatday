@@ -1,61 +1,73 @@
 import type {
   BestWindow,
   ConditionsSnapshot,
-  FlagColor,
   HourlyScore,
-  RipRisk,
-  SargassumRisk,
   ScoreResult,
   SubScore,
-  WaterQualityRating,
 } from "@/lib/types";
-import { clamp, degToCardinal, dewPointFromTempRH, plateau, round } from "@/lib/util";
-import { currentSandTempF, estimateSandTempF } from "@/lib/sandTemp";
+import { clamp, degToCardinal, dewPointFromTempRH, mphToKnots, plateau, round } from "@/lib/util";
 
-// Consolidated, best-available values pulled across all sources.
+// Consolidated, best-available values pulled across all sources. Wind/seas/storms
+// are the make-or-break boating signals; the rest refine the day's quality.
 export interface Derived {
   airTempF?: number;
   waterTempF?: number;
   windSpeedMph?: number;
+  windGustMph?: number;
   windDirDeg?: number;
-  waveHeightFt?: number; // combined sea state (for swimming calmness)
+  waveHeightFt?: number; // combined sea state
+  wavePeriodS?: number; // dominant/peak wave period — long swell rides gentler than short chop
   precipProbability?: number;
   shortForecast?: string;
+  weatherCode?: number; // WMO code (hourly path); drives the rain/thunder cap
   uvIndex?: number;
   cloudCoverPct?: number; // 0 = full sun, 100 = overcast
   humidityPct?: number; // relative humidity, 0-100
   dewPointF?: number; // °F — the comfort/mugginess driver
-  weatherCode?: number; // WMO code (hourly path); drives the rain cap
-  /** Worst-of-cams seaweed level (morning-preferred); day-constant. */
-  sargassumLevel?: SargassumRisk;
-  /** 0-100 seaweed coverage at the worst cam; refines the seaweed sub-score. */
-  sargassumCoveragePct?: number;
-  /** 0-100 beach fullness (busiest cam now, or the hour's history); 0=empty. */
-  crowdPct?: number;
-  /** Estimated dry-sand surface temp (°F) — barefoot comfort (lib/sandTemp). */
-  sandTempF?: number;
-  flags: FlagColor[];
-  waterAdvisory: boolean;
-  waterRating: WaterQualityRating;
-  /** City-issued no-swim/beach advisory is active (myboca AlertCenter). */
-  noSwimAdvisory: boolean;
-  /** NWS Surf Zone Forecast rip-current risk. */
-  ripCurrentRisk: RipRisk;
-  /** A severe NWS warning (hurricane/tropical storm/tsunami/high surf) is active. */
+  visibilityMi?: number; // horizontal visibility (miles) — fog is a navigation hazard
+  tideTrend?: "rising" | "falling"; // incoming vs outgoing — drives the inlet sub-score
+  // --- safety flags (drive the hard caps) ---
+  /** Small Craft Advisory active in the offshore marine zone. */
+  smallCraftAdvisory: boolean;
+  /** Special Marine Warning (severe thunderstorm/waterspout over the water). */
+  specialMarineWarning: boolean;
+  /** Gale/Storm/Hurricane-force Warning or tsunami in the marine zone. */
+  severeMarineWarning: boolean;
+  /** Marine Dense Fog Advisory active. */
+  denseFogAdvisory: boolean;
+  /** A severe NWS warning on the LAND point (hurricane/tropical storm/storm surge/tsunami). */
   severeAlert: boolean;
+  /** GLM lightning strike counts within radius bands (0 when none/unknown). */
+  lightningWithin10mi: number;
+  lightningWithin25mi: number;
 }
 
-/** Events that make the beach genuinely dangerous/closed — hard score cap. */
-const SEVERE_ALERT =
-  /hurricane warning|tropical storm warning|storm surge warning|tsunami|high surf warning/i;
+// --- marine-alert classification (tested against marineAlerts[].event) ------
+// A gale/storm/hurricane-force warning, a Hazardous Seas Warning (waves/steepness
+// past warning criteria), or a tsunami means the water is no place for a small
+// boat — the harshest marine cap.
+const SEVERE_MARINE = /gale warning|storm warning|hurricane force|hazardous seas warning|tsunami/i;
+// A Special Marine Warning is a short-fuse severe thunderstorm/waterspout over the water.
+const SPECIAL_MARINE_WARNING = /special marine warning/i;
+// A Small Craft Advisory: conditions hazardous to small boats (wind/seas).
+const SMALL_CRAFT_ADVISORY = /small craft advisory/i;
+// A marine Dense Fog Advisory: visibility low enough to be a navigation hazard.
+const DENSE_FOG = /dense fog advisory/i;
+
+/**
+ * A severe NWS warning on the LAND point that closes the day. (Gale/storm live in
+ * the marine severities above; high surf is not a land-stopper for boating, so it's
+ * dropped from this list versus the beach app.)
+ */
+const SEVERE_ALERT = /hurricane warning|tropical storm warning|storm surge warning|tsunami/i;
 
 export function deriveMetrics(s: ConditionsSnapshot): Derived {
   const w = s.weather.data;
   const b = s.buoy.data;
   const m = s.marine.data;
-  const c = s.cityOfficial.data;
-  const q = s.waterQuality.data;
   const n = s.nws.data;
+  const marineAlerts = n?.marineAlerts ?? [];
+  const anyMarine = (re: RegExp) => marineAlerts.some((a) => re.test(a.event));
   // Dew point drives the comfort score; fall back to computing it from temp + RH.
   const dpFallback =
     w?.airTempF != null && w?.humidityPct != null
@@ -65,25 +77,47 @@ export function deriveMetrics(s: ConditionsSnapshot): Derived {
     airTempF: w?.airTempF ?? b?.airTempF,
     waterTempF: b?.waterTempF ?? m?.seaSurfaceTempF,
     windSpeedMph: w?.windSpeedMph ?? b?.windSpeedMph,
+    windGustMph: b?.windGustMph,
     windDirDeg: w?.windDirDeg ?? b?.windDirDeg,
     waveHeightFt: b?.waveHeightFt ?? m?.waveHeightFt,
+    wavePeriodS: b?.dominantPeriodS ?? m?.wavePeriodS,
     precipProbability: w?.precipProbability,
     shortForecast: w?.shortForecast,
     uvIndex: m?.uvIndex,
     cloudCoverPct: m?.cloudCoverPct,
-    sargassumLevel: s.sargassum.data?.level,
-    sargassumCoveragePct: s.sargassum.data?.coveragePct,
-    crowdPct: s.busyness.data?.crowdPct ?? crowdLevelPct(s.busyness.data?.level),
-    sandTempF: s.hourly.data ? currentSandTempF(s.hourly.data) : undefined,
     humidityPct: w?.humidityPct,
     dewPointF: w?.dewPointF ?? (dpFallback != null ? round(dpFallback) : undefined),
-    flags: c?.flags ?? ["unknown"],
-    waterAdvisory: q?.advisory ?? false,
-    waterRating: q?.overall ?? "unknown",
-    noSwimAdvisory: !!c?.noSwimAdvisory,
-    ripCurrentRisk: n?.ripCurrentRisk ?? "unknown",
+    // Visibility comes from the current weather when present, else the hourly
+    // entry closest to now (the snapshot can carry hourly visibility but no
+    // current-conditions field).
+    visibilityMi: w?.visibilityMi ?? hourlyVisibilityNow(s),
+    tideTrend: s.tides.data?.trend,
+    smallCraftAdvisory: anyMarine(SMALL_CRAFT_ADVISORY),
+    specialMarineWarning: anyMarine(SPECIAL_MARINE_WARNING),
+    severeMarineWarning: anyMarine(SEVERE_MARINE),
+    denseFogAdvisory: anyMarine(DENSE_FOG),
     severeAlert: (n?.alerts ?? []).some((a) => SEVERE_ALERT.test(a.event)),
+    lightningWithin10mi: s.lightning.data?.within10mi ?? 0,
+    lightningWithin25mi: s.lightning.data?.within25mi ?? 0,
   };
+}
+
+/** Visibility from the hourly entry whose timestamp is closest to now. */
+function hourlyVisibilityNow(s: ConditionsSnapshot): number | undefined {
+  const hours = s.hourly.data;
+  if (!hours?.length) return undefined;
+  const now = Date.now();
+  let best: number | undefined;
+  let bestDelta = Infinity;
+  for (const h of hours) {
+    if (h.visibilityMi == null) continue;
+    const delta = Math.abs(new Date(h.time).getTime() - now);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      best = h.visibilityMi;
+    }
+  }
+  return best;
 }
 
 /**
@@ -91,7 +125,7 @@ export function deriveMetrics(s: ConditionsSnapshot): Derived {
  * 8 points of the day's peak — i.e. "the best stretch to go". `endIso` is the
  * end of the last hour in the run. Null when there are no hours.
  */
-export function bestBeachWindow(hours: HourlyScore[]): BestWindow | null {
+export function bestBoatWindow(hours: HourlyScore[]): BestWindow | null {
   if (!hours.length) return null;
   const max = Math.max(...hours.map((h) => h.score));
   const threshold = max - 8;
@@ -126,61 +160,185 @@ export function bestBeachWindow(hours: HourlyScore[]): BestWindow | null {
 }
 
 // --- individual curves -----------------------------------------------------
-// Wind: a light sea breeze is the sweet spot, not dead calm. Under ~5 mph is
-// stagnant/buggy/hot; 5-13 mph is ideal; above ~13 mph turns choppy and starts
-// blowing sand. Plateau across [5, 13], tapering to 0 over 12 mph on each side
-// (so dead calm ≈ 58, a 25 mph gale ≈ 0).
-const windScore = (mph: number) => plateau(mph, 5, 13, 12);
-const waveCalm = (ft: number) => clamp(100 - Math.max(0, ft - 1) * 25, 0, 100);
-const uvScore = (uv: number) => clamp(100 - Math.max(0, uv - 8) * 12, 0, 100);
 
-function waterQualityScore(r: WaterQualityRating): number | null {
-  switch (r) {
-    case "good":
-      return 100;
-    case "moderate":
-      return 60;
-    case "poor":
-      return 0;
-    default:
-      return null; // unknown -> excluded from the average
+/** Piecewise-linear interpolation through sorted (x,y) anchors, clamped to the ends. */
+function lerpCurve(x: number, anchors: [number, number][]): number {
+  if (x <= anchors[0][0]) return anchors[0][1];
+  const last = anchors[anchors.length - 1];
+  if (x >= last[0]) return last[1];
+  for (let i = 1; i < anchors.length; i++) {
+    const [x1, y1] = anchors[i];
+    if (x <= x1) {
+      const [x0, y0] = anchors[i - 1];
+      return y0 + ((x - x0) / (x1 - x0)) * (y1 - y0);
+    }
   }
+  return last[1];
 }
 
-// Sky sub-score blends "sunshine" (from cloud cover) with "dryness" (from precip
-// probability): full sun + no rain → ~100; partly cloudy → mid; overcast or rainy
-// → low. Sunshine is weighted a bit higher (it drives the "is it a sunny beach
-// day" feel), while active storms/rain in the forecast text clamp it as a floor.
-// (Confirmed rain ALSO hard-caps the whole composite score — see applyBeachCaps.)
-function skyScore(d: Derived): number | null {
-  const sunshine =
-    d.cloudCoverPct != null ? clamp(100 - d.cloudCoverPct, 0, 100) : null;
+/**
+ * Wind sub-score (in KNOTS — boaters speak knots). Unlike the beach curve, dead
+ * calm is *perfect* for boating (glass water), so 0-10 kn is full marks, fading
+ * to 0 by 25 kn. A wide gust spread (squally) is worse than steady wind at the
+ * same average, so a spread of more than 8 kn over the sustained speed subtracts
+ * up to 20 points.
+ */
+function windScore(d: Derived): number | null {
+  if (d.windSpeedMph == null) return null;
+  const kn = mphToKnots(d.windSpeedMph);
+  let s = plateau(kn, 0, 10, 15); // 0-10 kn = 100, linear to 0 at 25 kn
+  if (d.windGustMph != null) {
+    const gustKn = mphToKnots(d.windGustMph);
+    const spread = gustKn - kn;
+    if (spread > 8) s -= Math.min(20, (spread - 8) * 4);
+  }
+  return clamp(s, 0, 100);
+}
+
+/** "8 kn ENE · gusts 14" — sustained + direction, with gusts when known. */
+function windDisplay(d: Derived): string | undefined {
+  if (d.windSpeedMph == null) return undefined;
+  const kn = Math.round(mphToKnots(d.windSpeedMph));
+  let s = `${kn} kn`;
+  if (d.windDirDeg != null) s += ` ${degToCardinal(d.windDirDeg)}`;
+  if (d.windGustMph != null) s += ` · gusts ${Math.round(mphToKnots(d.windGustMph))}`;
+  return s;
+}
+
+/**
+ * Seas sub-score: flat water is best; steepness matters as much as height. Long-
+ * period swell (>= 8 s) rolls gently underfoot (+10), while short-period chop
+ * (<= 5 s) at any real height is the slamming, spray-in-the-face ride that beats
+ * a small boat up (-10).
+ */
+const SEAS_CURVE: [number, number][] = [
+  [0, 100],
+  [2, 90],
+  [3, 70],
+  [4, 45],
+  [6, 15],
+  [8, 0],
+];
+function seasScore(d: Derived): number | null {
+  if (d.waveHeightFt == null) return null;
+  let s = lerpCurve(d.waveHeightFt, SEAS_CURVE);
+  if (d.wavePeriodS != null) {
+    if (d.wavePeriodS >= 8) s += 10;
+    else if (d.wavePeriodS <= 5 && d.waveHeightFt >= 2) s -= 10;
+  }
+  return clamp(s, 0, 100);
+}
+
+/** "2.3 ft @ 9 s" — height with period when known. */
+function seasDisplay(d: Derived): string | undefined {
+  if (d.waveHeightFt == null) return undefined;
+  return d.wavePeriodS != null
+    ? `${d.waveHeightFt} ft @ ${Math.round(d.wavePeriodS)} s`
+    : `${d.waveHeightFt} ft`;
+}
+
+/**
+ * Storms & rain sub-score blends "dryness" (from precip probability) with
+ * "sunshine" (from cloud cover): no rain + full sun → ~100; rainy/overcast → low.
+ * Dryness is weighted higher (rain is the bigger boating spoiler). Active
+ * storm/rain wording in the forecast text clamps it as a floor. (Confirmed
+ * thunder/rain ALSO hard-cap the whole composite — see applyBoatCaps.)
+ */
+function stormsScore(d: Derived): number | null {
   const dry =
     typeof d.precipProbability === "number"
       ? clamp(100 - d.precipProbability, 0, 100)
       : null;
+  const sunshine =
+    d.cloudCoverPct != null ? clamp(100 - d.cloudCoverPct, 0, 100) : null;
 
   let base: number | null;
-  if (sunshine != null && dry != null) base = 0.6 * sunshine + 0.4 * dry;
-  else base = sunshine ?? dry;
+  if (dry != null && sunshine != null) base = 0.7 * dry + 0.3 * sunshine;
+  else base = dry ?? sunshine;
 
   const f = d.shortForecast?.toLowerCase() ?? "";
   if (base == null) {
     if (!f) return null; // no numeric or text signal at all
     base = 75; // neutral default when only text is available
   }
-  if (/thunder|storm/.test(f)) base = Math.min(base, 45);
-  else if (/rain|shower/.test(f)) base = Math.min(base, 60);
-  else if (/overcast/.test(f)) base = Math.min(base, 60);
+  // Hedged wording ("chance/slight/possible/isolated") feeds the probability but
+  // does not clamp — a mere chance of a storm shouldn't floor a sunny, calm day.
+  if (!/chance|slight|possible|isolated/.test(f)) {
+    if (/thunder|storm/.test(f)) base = Math.min(base, 35);
+    else if (/rain|shower/.test(f)) base = Math.min(base, 55);
+  }
   return clamp(base, 0, 100);
 }
 
-/** Human-readable summary of the sky inputs for the score breakdown. */
-function skyDisplay(d: Derived): string | undefined {
+/** Human-readable summary of the storms/sky inputs for the score breakdown. */
+function stormsDisplay(d: Derived): string | undefined {
   const parts: string[] = [];
   if (d.shortForecast) parts.push(d.shortForecast);
   if (d.cloudCoverPct != null) parts.push(`${d.cloudCoverPct}% cloud`);
   return parts.length ? parts.join(" · ") : undefined;
+}
+
+/**
+ * Visibility sub-score: fog is a navigation hazard. Under half a mile is a
+ * whiteout (0); 10+ miles is crystal clear (100). (Visibility under 1 mi or a
+ * Dense Fog Advisory ALSO hard-caps the composite — see applyBoatCaps.)
+ */
+const VISIBILITY_CURVE: [number, number][] = [
+  [0.5, 0],
+  [1, 25],
+  [3, 60],
+  [6, 90],
+  [10, 100],
+];
+function visibilityScore(mi: number | undefined): number | null {
+  return mi == null ? null : lerpCurve(mi, VISIBILITY_CURVE);
+}
+
+/** UV exposure: there's no shade on a boat, so a high index drags the day. */
+const uvScore = (uv: number) => clamp(100 - Math.max(0, uv - 8) * 12, 0, 100);
+
+/**
+ * Comfort (mugginess) from dew point — the real "how heavy does the air feel"
+ * signal (sweat can't evaporate as the dew point climbs). <=60°F feels great;
+ * each °F above subtracts ~5 (≈68°F→60, 72°F→40, ≥80°F→0). Very high relative
+ * humidity (>85%) adds a small extra penalty. Null when no dew point is known.
+ */
+function comfortScore(d: Derived): number | null {
+  if (d.dewPointF == null) return null;
+  let s = clamp(100 - Math.max(0, d.dewPointF - 60) * 5, 0, 100);
+  if (d.humidityPct != null && d.humidityPct > 85) {
+    s = clamp(s - (d.humidityPct - 85) * 1.5, 0, 100);
+  }
+  return s;
+}
+
+function comfortDisplay(d: Derived): string | undefined {
+  if (d.dewPointF == null) return undefined;
+  const parts = [`${d.dewPointF}°F dew pt`];
+  if (d.humidityPct != null) parts.push(`${d.humidityPct}% RH`);
+  return parts.join(" · ");
+}
+
+/** East quadrant (45-135°): an onshore wind that stacks against an outgoing tide. */
+const isEastWind = (deg: number) => deg >= 45 && deg <= 135;
+
+/**
+ * Tide & inlet sub-score. An incoming (rising) tide is the friendly window —
+ * deeper water over the sandbars, current carrying you in. An outgoing (falling)
+ * tide is merely so-so (60). But a falling tide running OUT against an onshore
+ * east wind stands the inlet up into a steep, dangerous chop — the classic
+ * "ebb against wind" — so that combination drops to 25. Unknown trend → null.
+ */
+function tideScore(d: Derived): { score: number | null; display?: string } {
+  if (d.tideTrend === "rising") return { score: 100, display: "rising — incoming" };
+  if (d.tideTrend === "falling") {
+    const kn = d.windSpeedMph != null ? mphToKnots(d.windSpeedMph) : null;
+    if (d.windDirDeg != null && isEastWind(d.windDirDeg) && kn != null && kn >= 10) {
+      return { score: 25, display: "ebb against east wind — steep inlet chop" };
+    }
+    return { score: 60, display: "falling — outgoing" };
+  }
+  return { score: null };
 }
 
 // --- combination + caps ----------------------------------------------------
@@ -213,161 +371,29 @@ function sub(
   return { key, label, score: score == null ? null : Math.round(score), weight, display };
 }
 
-/**
- * Comfort (mugginess) from dew point — the real "how heavy does the air feel"
- * signal (sweat can't evaporate as the dew point climbs). <=60°F feels great;
- * each °F above subtracts ~5 (≈68°F→60, 72°F→40, ≥80°F→0). Very high relative
- * humidity (>85%) adds a small extra penalty. Null when no dew point is known.
- */
-function comfortScore(d: Derived): number | null {
-  if (d.dewPointF == null) return null;
-  let s = clamp(100 - Math.max(0, d.dewPointF - 60) * 5, 0, 100);
-  if (d.humidityPct != null && d.humidityPct > 85) {
-    s = clamp(s - (d.humidityPct - 85) * 1.5, 0, 100);
-  }
-  return s;
-}
-
-function comfortDisplay(d: Derived): string | undefined {
-  if (d.dewPointF == null) return undefined;
-  const parts = [`${d.dewPointF}°F dew pt`];
-  if (d.humidityPct != null) parts.push(`${d.humidityPct}% RH`);
-  return parts.join(" · ");
-}
-
-/** Piecewise-linear interpolation through sorted (x,y) anchors, clamped to the ends. */
-function lerpCurve(x: number, anchors: [number, number][]): number {
-  if (x <= anchors[0][0]) return anchors[0][1];
-  const last = anchors[anchors.length - 1];
-  if (x >= last[0]) return last[1];
-  for (let i = 1; i < anchors.length; i++) {
-    const [x1, y1] = anchors[i];
-    if (x <= x1) {
-      const [x0, y0] = anchors[i - 1];
-      return y0 + ((x - x0) / (x1 - x0)) * (y1 - y0);
-    }
-  }
-  return last[1];
-}
-
-/**
- * Seaweed (sargassum) as a beach-quality sub-score. When the vision job reports a
- * 0-100 coverage %, we interpolate a fine score through anchors that match the
- * categorical values exactly (so nothing regresses); otherwise we fall back to the
- * category map. Unknown → null (excluded from the average). Moderate/high ALSO cap
- * the score by category (see applyBeachCaps).
- */
-const SARGASSUM_SCORE: Record<string, number> = { none: 100, low: 85, moderate: 55, high: 20 };
-const SEAWEED_COVER_CURVE: [number, number][] = [
-  [0, 100],
-  [10, 85],
-  [30, 55],
-  [60, 20],
-  [100, 0],
-];
-function sargassumScore(level: SargassumRisk | undefined, pct?: number): number | null {
-  if (pct != null) return lerpCurve(pct, SEAWEED_COVER_CURVE);
-  return level && level in SARGASSUM_SCORE ? SARGASSUM_SCORE[level] : null;
-}
-function sargassumDisplay(d: Derived): string | undefined {
-  if (!d.sargassumLevel || d.sargassumLevel === "unknown") return undefined;
-  const label = d.sargassumLevel[0].toUpperCase() + d.sargassumLevel.slice(1);
-  return d.sargassumCoveragePct != null ? `${label} · ~${d.sargassumCoveragePct}% covered` : label;
-}
-
-/** Representative fullness % for a categorical crowd level (fallback when no pct). */
-const CROWD_LEVEL_PCT: Record<string, number> = {
-  empty: 5,
-  quiet: 25,
-  moderate: 50,
-  busy: 75,
-  packed: 95,
-};
-function crowdLevelPct(level: string | undefined): number | undefined {
-  return level && level in CROWD_LEVEL_PCT ? CROWD_LEVEL_PCT[level] : undefined;
-}
-/** Crowds as a beach-quality sub-score: emptier is better, packed is worst. */
-const CROWD_CURVE: [number, number][] = [
-  [0, 100],
-  [25, 90],
-  [50, 70],
-  [75, 45],
-  [100, 25],
-];
-function crowdScore(pct: number | undefined): number | null {
-  return pct == null ? null : lerpCurve(pct, CROWD_CURVE);
-}
-
-/**
- * Sand barefoot-comfort as a sub-score: fine under ~95°F, sandals territory
- * through the low 100s-120s, burn-risk sand near worthless. Mirrors the
- * verdict bands in lib/sandTemp.ts.
- */
-const SAND_CURVE: [number, number][] = [
-  [95, 100],
-  [115, 70],
-  [130, 35],
-  [145, 5],
-];
-function sandScore(tempF: number | undefined): number | null {
-  return tempF == null ? null : lerpCurve(tempF, SAND_CURVE);
-}
-
-export function scoreBeachDay(d: Derived): ScoreResult {
+export function scoreBoatDay(d: Derived): ScoreResult {
+  const tide = tideScore(d);
   const subs: SubScore[] = [
+    sub("wind", "Wind", windScore(d), 0.24, windDisplay(d)),
+    sub("seas", "Seas (height & period)", seasScore(d), 0.22, seasDisplay(d)),
+    sub("storms", "Storms & rain", stormsScore(d), 0.18, stormsDisplay(d)),
+    sub("visibility", "Visibility", visibilityScore(d.visibilityMi), 0.08, f1(d.visibilityMi, " mi")),
     sub(
       "airTemp",
       "Air temperature",
-      d.airTempF != null ? plateau(d.airTempF, 78, 88, 18) : null,
-      0.17,
+      d.airTempF != null ? plateau(d.airTempF, 72, 90, 20) : null,
+      0.08,
       f1(d.airTempF, "°F"),
     ),
-    sub("sky", "Sky (sun & rain)", skyScore(d), 0.17, skyDisplay(d)),
-    sub(
-      "wind",
-      "Wind (sea breeze)",
-      d.windSpeedMph != null ? windScore(d.windSpeedMph) : null,
-      0.14,
-      d.windSpeedMph != null
-        ? `${d.windSpeedMph} mph${d.windDirDeg != null ? " " + degToCardinal(d.windDirDeg) : ""}`
-        : undefined,
-    ),
-    sub("comfort", "Comfort (mugginess)", comfortScore(d), 0.08, comfortDisplay(d)),
+    sub("comfort", "Comfort (mugginess)", comfortScore(d), 0.06, comfortDisplay(d)),
     sub(
       "waterTemp",
       "Water temperature",
-      d.waterTempF != null ? plateau(d.waterTempF, 77, 84, 15) : null,
-      0.10,
+      d.waterTempF != null ? plateau(d.waterTempF, 76, 86, 16) : null,
+      0.06,
       f1(d.waterTempF, "°F"),
     ),
-    sub(
-      "waves",
-      "Sea state (swim calmness)",
-      d.waveHeightFt != null ? waveCalm(d.waveHeightFt) : null,
-      0.08,
-      f1(d.waveHeightFt, " ft"),
-    ),
-    sub(
-      "waterQuality",
-      "Water quality",
-      waterQualityScore(d.waterRating),
-      0.06,
-      d.waterRating,
-    ),
-    sub(
-      "sargassum",
-      "Seaweed (sargassum)",
-      sargassumScore(d.sargassumLevel, d.sargassumCoveragePct),
-      0.07,
-      sargassumDisplay(d),
-    ),
-    sub(
-      "crowds",
-      "Crowds",
-      crowdScore(d.crowdPct),
-      0.05,
-      d.crowdPct != null ? `~${d.crowdPct}% full` : undefined,
-    ),
+    sub("tide", "Tide & inlet", tide.score, 0.04, tide.display),
     sub(
       "uv",
       "UV index",
@@ -375,17 +401,10 @@ export function scoreBeachDay(d: Derived): ScoreResult {
       0.04,
       d.uvIndex != null ? `${d.uvIndex}` : undefined,
     ),
-    sub(
-      "sandTemp",
-      "Sand temperature (barefoot)",
-      sandScore(d.sandTempF),
-      0.04,
-      d.sandTempF != null ? `~${d.sandTempF}°F est.` : undefined,
-    ),
   ];
 
   const rawScore = combine(subs);
-  const { score, caps } = applyBeachCaps(rawScore, d);
+  const { score, caps } = applyBoatCaps(rawScore, d);
   return { score, rawScore, rating: ratingFor(score), subScores: subs, caps };
 }
 
@@ -395,7 +414,7 @@ export type RainSeverity = "none" | "rain" | "thunder";
  * Whether it's actively raining/stormy. WMO weather codes are authoritative when
  * present (the hourly-forecast path); otherwise we read the forecast text but
  * ignore hedged "chance/slight/possible" wording, so a mere *chance* of rain does
- * not trip the cap (it still feeds skyScore via precip probability).
+ * not trip the cap (it still feeds stormsScore via precip probability).
  */
 export function rainSeverity(d: Derived): RainSeverity {
   const c = d.weatherCode;
@@ -411,122 +430,96 @@ export function rainSeverity(d: Derived): RainSeverity {
   return "none";
 }
 
-function applyBeachCaps(
+/**
+ * Hard safety caps — worst wins. Every cap pushes a plain-English string so the
+ * UI can explain *why* a day is rated low. The NWS marine zone is the boating
+ * safety authority — its warnings override the computed score.
+ */
+function applyBoatCaps(
   raw: number,
   d: Derived,
 ): { score: number; caps: string[] } {
   let score = raw;
   const caps: string[] = [];
-  // Lifeguard flags are safety signals. We distinguish a true closure from a
-  // swim-hazard warning:
-  //  - DOUBLE-RED means the water is closed — there's no beach day to be had, so
-  //    it bottoms the score out.
-  //  - A single RED flag means rough/hazardous surf where swimming is
-  //    discouraged. That's a swimmer-safety issue, not a beach-day-killer: you
-  //    can still have a great day on the sand, so it only caps at 85 (and stays
-  //    surfaced in the safety banner regardless).
-  // The purple (dangerous marine life) flag is intentionally NOT a score cap —
-  // it's a near-constant in South Florida, so it carries no day-to-day signal.
-  if (d.flags.includes("double-red")) {
+  // A gale/storm/hurricane-force warning means a small boat has no business out.
+  if (d.severeMarineWarning) {
     score = Math.min(score, 5);
-    caps.push("Double red flag — water access closed");
-  } else if (d.flags.includes("red")) {
-    score = Math.min(score, 85);
-    caps.push("Red flag — high hazard, swimming discouraged");
+    caps.push("Gale or storm warning — do not go out");
   }
-  if (d.waterAdvisory) {
-    score = Math.min(score, 40);
-    caps.push("Water quality advisory in effect");
-  }
-  // A City-issued no-swim advisory is a direct swim-safety override.
-  if (d.noSwimAdvisory) {
-    score = Math.min(score, 40);
-    caps.push("City no-swim advisory in effect");
-  }
-  // Heavy/moderate seaweed isn't a safety hazard but it genuinely degrades the
-  // beach (smelly brown mats, murky water) — so it caps how good the day can be.
-  if (d.sargassumLevel === "high") {
-    score = Math.min(score, 65);
-    caps.push("Heavy seaweed (sargassum) on the beach");
-  } else if (d.sargassumLevel === "moderate") {
-    score = Math.min(score, 85);
-    caps.push("Moderate seaweed (sargassum) on the beach");
-  }
-  // NWS rip-current risk: HIGH means life-threatening rip currents are likely.
-  // Like a red flag, this is a swimmer-safety hazard rather than a beach-day
-  // killer — you can still enjoy the sand — so it caps at 85, not lower.
-  if (d.ripCurrentRisk === "high") {
-    score = Math.min(score, 85);
-    caps.push("High rip current risk (NWS)");
-  }
-  // A severe NWS warning (hurricane/tropical storm/tsunami/high surf) closes the day.
+  // A severe LAND warning (hurricane/tropical storm/storm surge/tsunami) closes the day.
   if (d.severeAlert) {
-    score = Math.min(score, 15);
+    score = Math.min(score, 10);
     caps.push("Severe weather warning in effect");
   }
-  // Rain is a hard ceiling on the whole day (not just the sky sub-score): an
-  // actively rainy/stormy hour is an unacceptable beach day regardless of how
-  // warm/calm it is otherwise.
+  // A Special Marine Warning is a short-fuse severe thunderstorm/waterspout overhead.
+  if (d.specialMarineWarning) {
+    score = Math.min(score, 15);
+    caps.push("Severe thunderstorm over the water");
+  }
+  // Lightning close enough to be an immediate strike risk — never leave the dock.
+  if (d.lightningWithin10mi > 0) {
+    score = Math.min(score, 15);
+    caps.push("Lightning within 10 miles");
+  }
+  // Thunder is life-threatening on open water (no shelter); it's a hard ceiling
+  // beyond just the storms sub-score.
   const rain = rainSeverity(d);
   if (rain === "thunder") {
-    score = Math.min(score, 15);
-    caps.push("Thunderstorm in the forecast");
-  } else if (rain === "rain") {
-    score = Math.min(score, 25);
+    score = Math.min(score, 20);
+    caps.push("Thunderstorms in the forecast");
+  }
+  // Fog (advisory or measured visibility under a mile) is a navigation hazard.
+  if (d.denseFogAdvisory || (d.visibilityMi != null && d.visibilityMi < 1)) {
+    score = Math.min(score, 30);
+    caps.push("Dense fog — poor visibility on the water");
+  }
+  // Big seas can swamp or pound a small boat.
+  if (d.waveHeightFt != null && d.waveHeightFt >= 6) {
+    score = Math.min(score, 35);
+    caps.push("Rough seas");
+  }
+  // Lightning in the wider area — storms can build and close in fast.
+  if (d.lightningWithin25mi > 0) {
+    score = Math.min(score, 40);
+    caps.push("Lightning in the area");
+  }
+  // Steady rain: miserable and reduces visibility, even without thunder.
+  if (rain === "rain") {
+    score = Math.min(score, 40);
     caps.push("Rain in the forecast");
+  }
+  // A Small Craft Advisory: the marine authority says conditions are hazardous to
+  // small boats. Not a closure (bigger boats may still go), so it caps rather than
+  // bottoms out — but it stays surfaced regardless.
+  if (d.smallCraftAdvisory) {
+    score = Math.min(score, 45);
+    caps.push("Small Craft Advisory in effect");
   }
   return { score, caps };
 }
 
 export function computeScore(s: ConditionsSnapshot): ScoreResult {
-  return scoreBeachDay(deriveMetrics(s));
+  return scoreBoatDay(deriveMetrics(s));
 }
 
 const HOUR_MS = 3_600_000;
 
 /**
- * Forecast the Beach Day score across today's daylight hours. Reuses the pure
- * `scoreBeachDay` by combining each forecast hour's weather with the day-constant
- * water / quality / flag inputs from the current snapshot. Bounded to the hours
+ * Forecast the Boat Day score across today's daylight hours. Reuses the pure
+ * `scoreBoatDay` by combining each forecast hour's weather (air/wind/sky/precip/
+ * visibility) with the day-constant marine inputs from the current snapshot
+ * (seas, water temp, tide trend, marine alerts, lightning). Bounded to the hours
  * between sunrise and sunset. Returns [] when hourly data is unavailable.
  */
 export function computeHourlyScores(s: ConditionsSnapshot): HourlyScore[] {
   const hours = s.hourly.data;
   if (!hours?.length) return [];
 
-  // Day-constant inputs (water temp/quality/flags/waves/seaweed) reuse the snapshot.
+  // Day-constant inputs (seas, water temp, tide, alerts, lightning) reuse the snapshot.
   const base = deriveMetrics(s);
   const sun = s.sun.data;
   const sunrise = sun?.sunrise ? new Date(sun.sunrise).getTime() : null;
   const sunset = sun?.sunset ? new Date(sun.sunset).getTime() : null;
-
-  // Crowds vary through the day: map each LOCAL hour to its typical fullness.
-  const tz = s.location.timezone;
-  const localHourOf = (iso: string) =>
-    Number(
-      new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "2-digit", hour12: false }).format(
-        new Date(iso),
-      ),
-    ) % 24;
-  const crowdByHour = new Map<number, number | undefined>();
-  for (const bh of s.busyness.data?.byHour ?? []) {
-    crowdByHour.set(bh.hour, bh.crowdPct ?? crowdLevelPct(bh.level));
-  }
-
-  // Per-hour sand estimate (recent rain = that hour + the two before it),
-  // computed against the full hourly array before the daylight filter.
-  const sandByTime = new Map<string, number | undefined>();
-  hours.forEach((h, i) => {
-    sandByTime.set(
-      h.time,
-      estimateSandTempF({
-        soilTempF: h.soilTempF,
-        solarWm2: h.solarWm2,
-        windSpeedMph: h.windSpeedMph,
-        recentRainIn: [i, i - 1, i - 2].reduce((a, j) => a + (hours[j]?.precipIn ?? 0), 0),
-      }),
-    );
-  });
 
   return hours
     .filter((h) => {
@@ -540,27 +533,28 @@ export function computeHourlyScores(s: ConditionsSnapshot): HourlyScore[] {
         airTempF: h.airTempF,
         waterTempF: base.waterTempF,
         windSpeedMph: h.windSpeedMph,
+        windGustMph: base.windGustMph,
         windDirDeg: h.windDirDeg,
         waveHeightFt: base.waveHeightFt,
+        wavePeriodS: base.wavePeriodS,
         precipProbability: h.precipProbability,
         shortForecast: h.shortForecast,
+        weatherCode: h.weatherCode,
         uvIndex: h.uvIndex,
         cloudCoverPct: h.cloudCoverPct,
         humidityPct: h.humidityPct,
         dewPointF: h.dewPointF,
-        weatherCode: h.weatherCode,
-        sargassumLevel: base.sargassumLevel,
-        sargassumCoveragePct: base.sargassumCoveragePct,
-        crowdPct: crowdByHour.get(localHourOf(h.time)),
-        sandTempF: sandByTime.get(h.time),
-        flags: base.flags,
-        waterAdvisory: base.waterAdvisory,
-        waterRating: base.waterRating,
-        noSwimAdvisory: base.noSwimAdvisory,
-        ripCurrentRisk: base.ripCurrentRisk,
+        visibilityMi: h.visibilityMi,
+        tideTrend: base.tideTrend,
+        smallCraftAdvisory: base.smallCraftAdvisory,
+        specialMarineWarning: base.specialMarineWarning,
+        severeMarineWarning: base.severeMarineWarning,
+        denseFogAdvisory: base.denseFogAdvisory,
         severeAlert: base.severeAlert,
+        lightningWithin10mi: base.lightningWithin10mi,
+        lightningWithin25mi: base.lightningWithin25mi,
       };
-      const r = scoreBeachDay(d);
+      const r = scoreBoatDay(d);
       return {
         time: h.time,
         score: r.score,

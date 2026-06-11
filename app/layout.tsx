@@ -4,13 +4,13 @@ import "./globals.css";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 
 export const metadata: Metadata = {
-  title: "Is It Beach Day?",
+  title: "Is It Boat Day — should you take the boat out?",
   description:
-    "One answer to one question: is it a beach day? Live tides, water & air temp, wind, waves, water quality, and cams — distilled into a single 0–100 Beach Day score.",
-  applicationName: "Is It Beach Day",
+    "One answer to one question: is it a boat day? Live wind, seas, tides, and NWS marine alerts — distilled into a single 0–100 Boat Day score.",
+  applicationName: "Is It Boat Day",
   appleWebApp: {
     capable: true,
-    title: "Is It Beach Day?",
+    title: "Is It Boat Day",
     statusBarStyle: "black",
   },
   // Legacy iOS standalone flag (older Safari predates `mobile-web-app-capable`).

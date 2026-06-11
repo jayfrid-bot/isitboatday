@@ -19,6 +19,8 @@ const FIXTURE = {
     uv_index: [3.2, 6.7, 8.1, 2.0],
     relative_humidity_2m: [72, 68, null, 80],
     dew_point_2m: [69.4, 70.1, 72.8, 74.2],
+    visibility: [24140, 16093, 2414, null], // meters
+    precipitation: [0, 0, 0.04, 0.31], // inches
   },
 };
 
@@ -37,6 +39,19 @@ describe("parseOpenMeteoHourly", () => {
     expect(r0.humidityPct).toBe(72);
     expect(r0.dewPointF).toBe(69); // rounded
     expect(rows[2].humidityPct).toBeUndefined(); // null humidity -> missing
+  });
+
+  it("converts visibility from meters to statute miles (1 dp)", () => {
+    expect(rows[0].visibilityMi).toBe(15); // 24140 m
+    expect(rows[1].visibilityMi).toBe(10); // 16093 m
+    expect(rows[2].visibilityMi).toBe(1.5); // 2414 m
+    expect(rows[3].visibilityMi).toBeUndefined(); // null -> missing
+  });
+
+  it("keeps hourly precipitation (inches, 2 dp)", () => {
+    expect(rows[0].precipIn).toBe(0);
+    expect(rows[2].precipIn).toBe(0.04);
+    expect(rows[3].precipIn).toBe(0.31);
   });
 
   it("normalizes the GMT time to an absolute UTC ISO string", () => {

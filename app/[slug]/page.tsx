@@ -18,14 +18,14 @@ export async function generateMetadata({
   const { slug } = await params;
   const loc = getLocation(slug);
   return {
-    title: loc ? `${loc.name} — Is It Beach Day?` : "Is It Beach Day?",
+    title: loc ? `${loc.name} boating conditions — Is It Boat Day` : "Is It Boat Day",
     description: loc
-      ? `Live ${loc.name} beach conditions and a composite Beach Day score.`
+      ? `Live ${loc.name} boating conditions — wind, seas, tides, and marine alerts — with a composite Boat Day score.`
       : undefined,
   };
 }
 
-export default async function BeachPage({
+export default async function BoatPage({
   params,
 }: {
   params: Promise<{ slug: string }>;

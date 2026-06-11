@@ -1,6 +1,7 @@
 import type { ForecastDay, Wrapped } from "@/lib/types";
+import { mphToKnots } from "@/lib/util";
 
-/** 7-day outlook: one tile per day (sky emoji, hi/lo, rain %, max wind). */
+/** 7-day outlook: one tile per day (sky emoji, hi/lo, rain %, max wind in kn). */
 export function ForecastStrip({ forecast }: { forecast: Wrapped<ForecastDay[]> }) {
   const days = forecast.data ?? [];
   if (days.length === 0) return null;
@@ -26,7 +27,9 @@ export function ForecastStrip({ forecast }: { forecast: Wrapped<ForecastDay[]> }
               <div className="mt-1 text-[11px] font-medium text-ocean-300">💧 {d.rain}%</div>
             ) : null}
             {d.windMaxMph != null ? (
-              <div className="text-[11px] text-slate-500">💨 {d.windMaxMph}</div>
+              <div className="text-[11px] text-slate-500">
+                💨 {Math.round(mphToKnots(d.windMaxMph))} kn
+              </div>
             ) : null}
           </div>
         ))}

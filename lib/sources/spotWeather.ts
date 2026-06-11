@@ -48,6 +48,7 @@ export function parseOpenMeteoCurrent(
   const humidity = num("relative_humidity_2m");
   const dewPoint = num("dew_point_2m");
   const code = num("weather_code");
+  const visibility = num("visibility"); // meters
 
   if (temp !== undefined) out.airTempF = round(temp);
   if (feels !== undefined) out.apparentTempF = round(feels);
@@ -59,6 +60,9 @@ export function parseOpenMeteoCurrent(
   }
   if (humidity !== undefined) out.humidity = round(humidity);
   if (dewPoint !== undefined) out.dewPointF = round(dewPoint);
+  // Open-Meteo reports visibility in METERS; convert to statute miles (fog is a
+  // boating hazard, so the score and UI want this).
+  if (visibility !== undefined) out.visibilityMi = round(visibility / 1609.344, 1);
   if (code !== undefined) {
     out.weatherCode = code;
     out.shortForecast = wmoText(code);
@@ -85,7 +89,7 @@ export async function fetchSpotWeather(
   const url =
     `https://api.open-meteo.com/v1/forecast?latitude=${la}&longitude=${lo}` +
     `&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,` +
-    `dew_point_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m` +
+    `dew_point_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,visibility` +
     `&temperature_unit=fahrenheit&wind_speed_unit=mph`;
   try {
     const res = await fetchWithTimeout(url, {

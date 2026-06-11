@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { listLocations } from "@/config/locations";
 import { getConditions } from "@/lib/conditions";
-import { beachDayVerdict, scoreColor } from "@/lib/format";
+import { boatDayVerdict, scoreColor } from "@/lib/format";
 import { LogoMark } from "@/components/Logo";
 
 export const revalidate = 300;
@@ -20,12 +20,11 @@ export default async function Home() {
       <header className="mb-10 flex flex-col items-center text-center">
         <LogoMark size={72} />
         <h1 className="mt-5 text-4xl font-bold tracking-tight text-white sm:text-5xl">
-          Is it beach day<span className="text-amber-400">?</span>
+          Is it boat day<span className="text-amber-400">?</span>
         </h1>
         <p className="mt-3 max-w-xl text-slate-400">
-          One answer to one question. Live tides, water &amp; air temp, wind,
-          waves, water quality, and cams — distilled into a single Beach Day
-          score.
+          One answer to one question. Live wind, seas, tides, and NWS marine
+          alerts — distilled into a single Boat Day score.
         </p>
       </header>
 
@@ -59,10 +58,10 @@ export default async function Home() {
                       className="text-lg font-semibold leading-tight"
                       style={{ color: scoreColor(data.score.score) }}
                     >
-                      {beachDayVerdict(data.score.score)}
+                      {boatDayVerdict(data.score.score)}
                     </div>
                     <div className="text-xs text-slate-500">
-                      Beach Day score right now
+                      Boat Day score right now
                     </div>
                   </div>
                 </div>
@@ -77,13 +76,13 @@ export default async function Home() {
       </div>
 
       <p className="mt-10 text-center text-xs text-slate-600">
-        Built to expand to every beach town — add a location in{" "}
+        Built to expand to every boating town — add a location in{" "}
         <code className="text-slate-400">config/locations.ts</code>.
       </p>
       <p className="mt-3 text-center text-xs text-slate-600">
         Feedback or ideas?{" "}
-        <a href="mailto:hello@isitbeachday.com" className="text-ocean-300 hover:underline">
-          hello@isitbeachday.com
+        <a href="mailto:hello@isitboatday.com" className="text-ocean-300 hover:underline">
+          hello@isitboatday.com
         </a>
       </p>
     </main>

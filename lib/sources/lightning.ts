@@ -7,6 +7,11 @@ const ATTRIBUTION = "NOAA GOES-19 GLM (lightning)";
  * Where the precomputed GLM strike feed lives. The heavy netCDF processing runs
  * OFF Netlify (a GitHub Action writes a small JSON to the `lightning-data`
  * branch); we just read that tiny file here. Override with LIGHTNING_FEED_URL.
+ *
+ * The default URL deliberately still points at the old `bocabeach` repo: per the
+ * plan, that branch is the shared GLM upstream and was kept as-is through the
+ * boat-day pivot. If the data branch is ever migrated to the isitboatday repo,
+ * update this default (or set LIGHTNING_FEED_URL).
  */
 const FEED_URL =
   process.env.LIGHTNING_FEED_URL ??

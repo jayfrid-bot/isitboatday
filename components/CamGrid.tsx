@@ -189,9 +189,10 @@ export function CamGrid({ cams, tz }: { cams: CamView[]; tz: string }) {
 
   return (
     <section>
-      <h2 className="text-lg font-semibold text-white">Beach &amp; surf cams</h2>
+      <h2 className="text-lg font-semibold text-white">Inlet &amp; waterway cams</h2>
       <p className="mb-4 mt-1 text-xs text-slate-500">
-        Live weather &amp; wind shown per cam, from Open-Meteo at each spot.
+        Check the inlet before you launch. Live weather &amp; wind shown per cam,
+        from Open-Meteo at each spot.
       </p>
 
       {featured.length ? (

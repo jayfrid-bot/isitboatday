@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { HourlyScore } from "@/lib/types";
 import { fmtTime, scoreColor } from "@/lib/format";
-import { degToCardinal } from "@/lib/util";
+import { degToCardinal, mphToKnots } from "@/lib/util";
 
 // viewBox geometry (units ≈ px at the common render width).
 const W = 720;
@@ -42,7 +42,7 @@ function scoreDomain(scores: number[]): { lo: number; hi: number; grid: number[]
 }
 
 /**
- * Beach Day score across today's daylight hours as a line graph that rises and
+ * Boat Day score across today's daylight hours as a line graph that rises and
  * falls with the score, with a "now" marker placed at the current local time,
  * and a per-hour wind (speed + direction) strip beneath it.
  */
@@ -120,12 +120,12 @@ export function HourlyScoreGraph({
     <section>
       <h2 className="mb-1 text-lg font-semibold text-white">Today&apos;s hourly score</h2>
       <p className="mb-3 text-xs text-slate-500">
-        Beach Day score through the day — sunrise to sunset. The marker is the
+        Boat Day score through the day — sunrise to sunset. The marker is the
         current local time.
       </p>
 
       <div className="rounded-2xl bg-slate-900/70 p-3 ring-1 ring-white/10">
-        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Hourly Beach Day score">
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Hourly Boat Day score">
           <defs>
             <linearGradient id="hsg-fill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.35" />
@@ -246,7 +246,8 @@ export function HourlyScoreGraph({
                   )}
                 </svg>
                 <div className="truncate text-[11px] font-medium text-slate-300">
-                  {typeof h.windSpeedMph === "number" ? h.windSpeedMph : "–"}
+                  {/* Boaters speak knots — match the hero Wind card and breakdown. */}
+                  {typeof h.windSpeedMph === "number" ? Math.round(mphToKnots(h.windSpeedMph)) : "–"}
                 </div>
                 <div className="truncate text-[9px] text-slate-500">
                   {known ? degToCardinal(h.windDirDeg as number) : ""}
@@ -257,7 +258,7 @@ export function HourlyScoreGraph({
           })}
         </div>
         <p className="mt-1 text-center text-[10px] text-slate-600">
-          wind mph · arrow points the way it blows
+          wind kn · arrow points the way it blows
         </p>
       </div>
     </section>

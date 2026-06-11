@@ -22,6 +22,15 @@ const config: Config = {
           900: "#194d8f",
           950: "#142f57",
         },
+        // Deep navy accent — the open-water feel for Is It Boat Day.
+        navy: {
+          400: "#3b6ea5",
+          500: "#2a5587",
+          600: "#1d3f6b",
+          700: "#152e4f",
+          800: "#0e2038",
+          900: "#081626",
+        },
       },
     },
   },

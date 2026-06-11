@@ -42,7 +42,7 @@ async function fetchOne(
   const begin = yyyymmdd(new Date(Date.now() - 6 * 3600_000)); // small lookback
   const url =
     `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions` +
-    `&application=boca-beach-rats&begin_date=${begin}&range=72&datum=MLLW` +
+    `&application=isitboatday&begin_date=${begin}&range=72&datum=MLLW` +
     `&station=${stationId}&time_zone=gmt&units=english&interval=hilo&format=json`;
   const res = await fetchWithTimeout(url, { next: { revalidate: 21600 } }); // 6h
   if (!res.ok) throw new Error(`NOAA tides ${stationId} -> ${res.status}`);

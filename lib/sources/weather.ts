@@ -51,11 +51,15 @@ async function fetchLatestObservation(
   const wdir = pr.windDirection?.value;
   const rh = pr.relativeHumidity?.value; // percent
   const dew = pr.dewpoint?.value; // Celsius
+  const vis = pr.visibility?.value; // meters
   if (typeof temp === "number") out.airTempF = round(cToF(temp));
   if (typeof wspd === "number") out.windSpeedMph = round(kmhToMph(wspd));
   if (typeof wdir === "number") out.windDirDeg = wdir;
   if (typeof rh === "number") out.humidityPct = round(rh);
   if (typeof dew === "number") out.dewPointF = round(cToF(dew));
+  // The station observation already carries visibility in METERS — convert to
+  // statute miles for the fog/visibility signal (no extra HTTP request).
+  if (typeof vis === "number") out.visibilityMi = round(vis / 1609.344, 1);
   if (typeof pr.textDescription === "string") out.shortForecast = pr.textDescription;
   if (typeof pr.timestamp === "string") out.observedAt = pr.timestamp;
   return { data: out, at };

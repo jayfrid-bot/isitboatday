@@ -1,5 +1,5 @@
 /*
- * Boca Beach Rats service worker — makes the app installable + usable offline,
+ * Is It Boat Day service worker — makes the app installable + usable offline,
  * without ever passing off stale conditions as live.
  *
  * Strategy:
@@ -12,8 +12,8 @@
  *    (large/own caching) — the SW doesn't touch them.
  */
 const VERSION = "v1";
-const STATIC_CACHE = `bbr-static-${VERSION}`;
-const RUNTIME_CACHE = `bbr-runtime-${VERSION}`;
+const STATIC_CACHE = `ibd-static-${VERSION}`;
+const RUNTIME_CACHE = `ibd-runtime-${VERSION}`;
 const KEEP = [STATIC_CACHE, RUNTIME_CACHE];
 
 self.addEventListener("install", () => {
@@ -70,7 +70,7 @@ async function networkFirst(req, cacheName) {
         "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>" +
           "<body style='background:#061826;color:#e2e8f0;font-family:system-ui;display:grid;place-items:center;height:100vh;margin:0;text-align:center'>" +
           "<div><h1 style='margin:0 0 .5rem'>You're offline</h1>" +
-          "<p style='color:#94a3b8'>Boca Beach Rats needs a connection to load fresh conditions.</p></div>",
+          "<p style='color:#94a3b8'>Is It Boat Day needs a connection to load fresh conditions.</p></div>",
         { status: 503, headers: { "Content-Type": "text/html; charset=utf-8" } },
       );
     }

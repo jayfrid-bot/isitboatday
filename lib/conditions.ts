@@ -1,21 +1,16 @@
 import { getLocation, toPublicLocation } from "@/config/locations";
 import type { ConditionsResponse, ConditionsSnapshot } from "@/lib/types";
 import { buildCamViews } from "@/lib/cams";
-import { fetchAirQuality } from "@/lib/sources/airQuality";
-import { fetchBusyness } from "@/lib/sources/busyness";
 import { fetchBuoy } from "@/lib/sources/buoy";
-import { fetchCityOfficial } from "@/lib/sources/cityOfficial";
 import { fetchForecast } from "@/lib/sources/forecast";
 import { fetchHourlyForecast } from "@/lib/sources/hourlyForecast";
 import { fetchLightning } from "@/lib/sources/lightning";
 import { fetchMarine } from "@/lib/sources/marine";
 import { fetchNowcast } from "@/lib/sources/nowcast";
 import { fetchNws } from "@/lib/sources/nws";
-import { fetchSargassum } from "@/lib/sources/sargassum";
 import { fetchSun } from "@/lib/sources/sun";
 import { fetchTides } from "@/lib/sources/tides";
 import { fetchTraffic } from "@/lib/sources/traffic";
-import { fetchWaterQuality } from "@/lib/sources/waterQuality";
 import { fetchWeather } from "@/lib/sources/weather";
 import { computeHourlyScores, computeScore } from "@/lib/score";
 import { nowIso } from "@/lib/util";
@@ -36,14 +31,9 @@ export async function getSnapshot(
     buoy,
     weather,
     marine,
-    cityOfficial,
-    waterQuality,
     nowcast,
     nws,
-    airQuality,
     lightning,
-    sargassum,
-    busyness,
     traffic,
     forecast,
     hourly,
@@ -52,14 +42,9 @@ export async function getSnapshot(
     fetchBuoy(loc),
     fetchWeather(loc),
     fetchMarine(loc),
-    fetchCityOfficial(loc),
-    fetchWaterQuality(loc),
     fetchNowcast(loc),
     fetchNws(loc),
-    fetchAirQuality(loc),
     fetchLightning(loc),
-    fetchSargassum(loc),
-    fetchBusyness(loc),
     fetchTraffic(loc),
     fetchForecast(loc),
     fetchHourlyForecast(loc),
@@ -72,14 +57,9 @@ export async function getSnapshot(
     buoy,
     weather,
     marine,
-    cityOfficial,
-    waterQuality,
     nowcast,
     nws,
-    airQuality,
     lightning,
-    sargassum,
-    busyness,
     traffic,
     forecast,
     sun: fetchSun(loc),

@@ -82,15 +82,10 @@ export function WindCompass({
         )}
       </svg>
       <WindSpinner speedMph={speedMph} />
-      <div>
-        <div className="text-2xl font-semibold text-white">
-          {typeof speedMph === "number" ? `${speedMph} mph` : "—"}
-        </div>
-        <div className="text-xs text-slate-400">
-          {known
-            ? `from ${degToCardinal(fromDeg as number)} · blowing ${degToCardinal(travelDeg % 360)}`
-            : "direction n/a"}
-        </div>
+      <div className="text-xs text-slate-400">
+        {known
+          ? `from ${degToCardinal(fromDeg as number)} · blowing ${degToCardinal(travelDeg % 360)}`
+          : "direction n/a"}
       </div>
     </div>
   );
