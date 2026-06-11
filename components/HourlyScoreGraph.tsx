@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { HourlyScore } from "@/lib/types";
 import { fmtTime, scoreColor } from "@/lib/format";
 import { degToCardinal, mphToKnots } from "@/lib/util";
+import { SectionLabel } from "@/components/SectionLabel";
 
 // viewBox geometry (units ≈ px at the common render width).
 const W = 720;
@@ -118,13 +119,13 @@ export function HourlyScoreGraph({
 
   return (
     <section>
-      <h2 className="mb-1 text-lg font-semibold text-white">Today&apos;s hourly score</h2>
+      <SectionLabel className="mb-1">Today&apos;s hourly score</SectionLabel>
       <p className="mb-3 text-xs text-slate-500">
         Boat Day score through the day — sunrise to sunset. The marker is the
         current local time.
       </p>
 
-      <div className="rounded-2xl bg-slate-900/70 p-3 ring-1 ring-white/10">
+      <div className="rounded-2xl bg-slate-900/60 p-3 ring-1 ring-white/10 backdrop-blur">
         <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Hourly Boat Day score">
           <defs>
             <linearGradient id="hsg-fill" x1="0" y1="0" x2="0" y2="1">

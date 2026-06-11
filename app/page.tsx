@@ -3,6 +3,7 @@ import { listLocations } from "@/config/locations";
 import { getConditions } from "@/lib/conditions";
 import { boatDayVerdict, scoreColor } from "@/lib/format";
 import { LogoMark } from "@/components/Logo";
+import { HeroWaves } from "@/components/HeroWaves";
 
 export const revalidate = 300;
 
@@ -16,16 +17,20 @@ export default async function Home() {
   );
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
-      <header className="mb-10 flex flex-col items-center text-center">
-        <LogoMark size={72} />
-        <h1 className="mt-5 text-4xl font-bold tracking-tight text-white sm:text-5xl">
-          Is it boat day<span className="text-amber-400">?</span>
-        </h1>
-        <p className="mt-3 max-w-xl text-slate-400">
-          One answer to one question. Live wind, seas, tides, and NWS marine
-          alerts — distilled into a single Boat Day score.
-        </p>
+    <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
+      {/* Gradient hero — same dawn-over-water language as the dashboard. */}
+      <header className="relative mb-10 overflow-hidden rounded-3xl bg-dawn-hero ring-1 ring-white/10">
+        <div className="relative z-10 flex flex-col items-center px-5 pb-20 pt-10 text-center sm:pb-24 sm:pt-12">
+          <LogoMark size={72} />
+          <h1 className="mt-5 text-4xl font-bold tracking-tight text-white sm:text-5xl">
+            Is it boat day<span className="text-amber-400">?</span>
+          </h1>
+          <p className="mt-3 max-w-xl text-ocean-200/80">
+            One answer to one question. Live wind, seas, tides, and NWS marine
+            alerts — distilled into a single Boat Day score.
+          </p>
+        </div>
+        <HeroWaves />
       </header>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -33,7 +38,7 @@ export default async function Home() {
           <Link
             key={loc.slug}
             href={`/${loc.slug}`}
-            className="group rounded-2xl bg-slate-900/70 p-5 ring-1 ring-white/10 transition hover:ring-amber-400/40"
+            className="group rounded-2xl bg-slate-900/60 p-5 ring-1 ring-white/10 backdrop-blur transition-transform duration-200 hover:-translate-y-0.5 hover:ring-amber-400/40"
           >
             <div className="flex items-start justify-between">
               <div>
@@ -48,7 +53,7 @@ export default async function Home() {
               {data ? (
                 <div className="flex items-center gap-3">
                   <span
-                    className="flex h-11 w-11 items-center justify-center rounded-full text-base font-bold text-slate-950"
+                    className="flex h-11 w-11 items-center justify-center rounded-full text-base font-bold tabular-nums text-slate-950"
                     style={{ background: scoreColor(data.score.score) }}
                   >
                     {data.score.score}

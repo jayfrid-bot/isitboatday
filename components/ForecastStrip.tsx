@@ -1,5 +1,6 @@
 import type { ForecastDay, Wrapped } from "@/lib/types";
 import { mphToKnots } from "@/lib/util";
+import { SectionLabel } from "@/components/SectionLabel";
 
 /** 7-day outlook: one tile per day (sky emoji, hi/lo, rain %, max wind in kn). */
 export function ForecastStrip({ forecast }: { forecast: Wrapped<ForecastDay[]> }) {
@@ -8,26 +9,30 @@ export function ForecastStrip({ forecast }: { forecast: Wrapped<ForecastDay[]> }
 
   return (
     <section>
-      <h2 className="mb-3 text-lg font-semibold text-white">7-day outlook</h2>
+      <SectionLabel className="mb-3">7-day outlook</SectionLabel>
       <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
         {days.map((d) => (
           <div
             key={d.date}
-            className="rounded-2xl bg-slate-900/70 p-2.5 text-center ring-1 ring-white/10"
+            className="rounded-2xl bg-slate-900/60 p-2.5 text-center ring-1 ring-white/10 backdrop-blur transition-transform duration-200 hover:-translate-y-0.5 hover:ring-white/20"
           >
             <div className="text-xs font-medium uppercase text-slate-400">{d.dow}</div>
             <div className="my-1 text-2xl" title={d.sky} aria-label={d.sky}>
               {d.emoji}
             </div>
-            <div className="text-sm font-semibold text-white">
+            <div className="text-sm font-semibold tabular-nums text-white">
               {d.hi != null ? `${d.hi}°` : "—"}
             </div>
-            <div className="text-xs text-slate-500">{d.lo != null ? `${d.lo}°` : "—"}</div>
+            <div className="text-xs tabular-nums text-slate-500">
+              {d.lo != null ? `${d.lo}°` : "—"}
+            </div>
             {d.rain != null ? (
-              <div className="mt-1 text-[11px] font-medium text-ocean-300">💧 {d.rain}%</div>
+              <div className="mt-1 text-[11px] font-medium tabular-nums text-ocean-300">
+                💧 {d.rain}%
+              </div>
             ) : null}
             {d.windMaxMph != null ? (
-              <div className="text-[11px] text-slate-500">
+              <div className="text-[11px] tabular-nums text-slate-500">
                 💨 {Math.round(mphToKnots(d.windMaxMph))} kn
               </div>
             ) : null}

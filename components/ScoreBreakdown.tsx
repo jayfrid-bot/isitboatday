@@ -3,8 +3,10 @@ import { scoreColor } from "@/lib/format";
 
 export function ScoreBreakdown({ result }: { result: ScoreResult }) {
   return (
-    <div className="rounded-2xl bg-slate-900/70 p-5 ring-1 ring-white/10">
-      <h3 className="text-sm font-medium text-slate-300">Why this score</h3>
+    <div className="rounded-2xl bg-slate-900/60 p-5 ring-1 ring-white/10 backdrop-blur">
+      <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+        Why this score
+      </h3>
 
       {result.caps.length > 0 ? (
         <ul className="mt-3 space-y-1">
@@ -24,7 +26,7 @@ export function ScoreBreakdown({ result }: { result: ScoreResult }) {
           <li key={s.key}>
             <div className="flex items-center justify-between gap-2 text-xs">
               <span className="min-w-0 truncate text-slate-300">{s.label}</span>
-              <span className="shrink-0 whitespace-nowrap text-slate-400">
+              <span className="shrink-0 whitespace-nowrap tabular-nums text-slate-400">
                 {s.display ? `${s.display} · ` : ""}
                 {s.score == null ? "n/a" : `${s.score}`}
                 <span className="ml-1 text-slate-500">

@@ -4,6 +4,7 @@ import "./globals.css";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://isitboatday.com"),
   title: "Is It Boat Day — should you take the boat out?",
   description:
     "One answer to one question: is it a boat day? Live wind, seas, tides, and NWS marine alerts — distilled into a single 0–100 Boat Day score.",
@@ -12,6 +13,20 @@ export const metadata: Metadata = {
     capable: true,
     title: "Is It Boat Day",
     statusBarStyle: "black",
+  },
+  // Rich link previews (Slack, iMessage, X, Facebook…) — static 1200×630 card.
+  openGraph: {
+    title: "Is It Boat Day — should you take the boat out?",
+    description:
+      "Live wind, seas, tides, and NWS marine alerts — distilled into a single 0–100 Boat Day score.",
+    url: "https://isitboatday.com",
+    siteName: "Is It Boat Day",
+    images: [{ url: "/og.png", width: 1200, height: 630 }],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    images: ["/og.png"],
   },
   // Legacy iOS standalone flag (older Safari predates `mobile-web-app-capable`).
   other: { "apple-mobile-web-app-capable": "yes" },

@@ -71,8 +71,8 @@ export function SafetyBanner({
     >
       {/* Gale / Storm / Hurricane-force / tsunami on the marine zone — do not go out. */}
       {severeMarine.length ? (
-        <div className="mb-3 rounded-xl bg-rose-500/15 p-3 ring-1 ring-rose-500/40">
-          <div className="flex items-center gap-2 text-sm font-semibold text-rose-200">
+        <div className="mb-3 rounded-r-xl border-l-4 border-rose-500 bg-rose-500/15 p-3 pl-3.5">
+          <div className="flex items-center gap-2 text-sm font-bold text-rose-200">
             <span aria-hidden>🌀</span>
             <span>Gale or storm warning — do not go out</span>
           </div>
@@ -90,8 +90,8 @@ export function SafetyBanner({
 
       {/* Special Marine Warning — severe thunderstorm over the water, red. */}
       {smwMarine.length ? (
-        <div className="mb-3 rounded-xl bg-rose-500/15 p-3 ring-1 ring-rose-500/40">
-          <div className="flex items-center gap-2 text-sm font-semibold text-rose-200">
+        <div className="mb-3 rounded-r-xl border-l-4 border-rose-500 bg-rose-500/15 p-3 pl-3.5">
+          <div className="flex items-center gap-2 text-sm font-bold text-rose-200">
             <span aria-hidden>⛈️</span>
             <span>Special Marine Warning — severe storm over the water</span>
           </div>
@@ -109,8 +109,8 @@ export function SafetyBanner({
 
       {/* Land-point severe weather (hurricane / tropical storm / surge), red. */}
       {severeLand.length ? (
-        <div className="mb-3 rounded-xl bg-rose-500/15 p-3 ring-1 ring-rose-500/40">
-          <div className="flex items-center gap-2 text-sm font-semibold text-rose-200">
+        <div className="mb-3 rounded-r-xl border-l-4 border-rose-500 bg-rose-500/15 p-3 pl-3.5">
+          <div className="flex items-center gap-2 text-sm font-bold text-rose-200">
             <span aria-hidden>🚨</span>
             <span>Severe weather warning in effect</span>
           </div>
@@ -129,14 +129,14 @@ export function SafetyBanner({
       {/* Lightning within ~10 mi — red; ≤25 mi — amber. */}
       {lightningNear ? (
         <div
-          className={`mb-3 rounded-xl p-3 ring-1 ${
+          className={`mb-3 rounded-r-xl border-l-4 p-3 pl-3.5 ${
             (lt?.within10mi ?? 0) > 0
-              ? "bg-rose-500/15 ring-rose-500/40"
-              : "bg-amber-500/10 ring-amber-500/30"
+              ? "border-rose-500 bg-rose-500/15"
+              : "border-amber-500 bg-amber-500/10"
           }`}
         >
           <div
-            className={`flex items-center gap-2 text-sm font-semibold ${
+            className={`flex items-center gap-2 text-sm font-bold ${
               (lt?.within10mi ?? 0) > 0 ? "text-rose-200" : "text-amber-200"
             }`}
           >
@@ -164,8 +164,8 @@ export function SafetyBanner({
 
       {/* Small Craft Advisory — amber with a plain-English explanation. */}
       {scaMarine.length ? (
-        <div className="mb-3 rounded-xl bg-amber-500/10 p-3 ring-1 ring-amber-500/30">
-          <div className="flex items-center gap-2 text-sm font-semibold text-amber-200">
+        <div className="mb-3 rounded-r-xl border-l-4 border-amber-500 bg-amber-500/10 p-3 pl-3.5">
+          <div className="flex items-center gap-2 text-sm font-bold text-amber-200">
             <span aria-hidden>⚠️</span>
             <span>Small Craft Advisory</span>
           </div>
@@ -184,8 +184,8 @@ export function SafetyBanner({
 
       {/* Marine Dense Fog Advisory — amber (a navigation hazard). */}
       {fogMarine.length ? (
-        <div className="mb-3 rounded-xl bg-amber-500/10 p-3 ring-1 ring-amber-500/30">
-          <div className="flex items-center gap-2 text-sm font-semibold text-amber-200">
+        <div className="mb-3 rounded-r-xl border-l-4 border-amber-500 bg-amber-500/10 p-3 pl-3.5">
+          <div className="flex items-center gap-2 text-sm font-bold text-amber-200">
             <span aria-hidden>🌫️</span>
             <span>Dense Fog Advisory — poor visibility on the water</span>
           </div>
@@ -203,7 +203,7 @@ export function SafetyBanner({
 
       {/* Any other marine-zone or land alerts we didn't classify — surfaced amber. */}
       {otherMarine.length || otherLand.length ? (
-        <div className="rounded-xl bg-amber-500/10 p-3 ring-1 ring-amber-500/30">
+        <div className="rounded-r-xl border-l-4 border-amber-500 bg-amber-500/10 p-3 pl-3.5">
           <ul className="space-y-0.5 text-xs text-slate-300">
             {otherMarine.map((a) => (
               <li key={"m" + a.event + (a.ends ?? "")}>

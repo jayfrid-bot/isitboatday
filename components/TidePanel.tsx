@@ -46,9 +46,9 @@ export function TidePanel({
   const note = inletNote(trend, windFromDeg, windSpeedMph);
 
   return (
-    <div className="rounded-2xl bg-slate-900/70 p-4 ring-1 ring-white/10">
+    <div className="rounded-2xl bg-slate-900/60 p-4 ring-1 ring-white/10 backdrop-blur">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm text-slate-400">
+        <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-slate-400">
           <span aria-hidden>🌊</span>
           <span>Tides</span>
         </div>
@@ -72,8 +72,10 @@ export function TidePanel({
                 <span className="capitalize text-slate-300">
                   {e.type === "high" ? "High" : "Low"} tide
                 </span>
-                <span className="text-white">{fmtTime(e.time, tz)}</span>
-                <span className="w-12 text-right text-slate-400">{e.heightFt} ft</span>
+                <span className="tabular-nums text-white">{fmtTime(e.time, tz)}</span>
+                <span className="w-12 text-right tabular-nums text-slate-400">
+                  {e.heightFt} ft
+                </span>
               </li>
             ))}
           </ul>

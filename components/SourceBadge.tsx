@@ -10,8 +10,10 @@ const STATUS_COLOR: Record<string, string> = {
 
 export function SourceList({ sources }: { sources: SourceMeta[] }) {
   return (
-    <div className="rounded-2xl bg-slate-900/50 p-4 ring-1 ring-white/10">
-      <h3 className="text-sm font-medium text-slate-300">Data sources</h3>
+    <div className="rounded-2xl bg-slate-900/50 p-4 ring-1 ring-white/10 backdrop-blur">
+      <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+        Data sources
+      </h3>
       <ul className="mt-2 grid gap-1.5 sm:grid-cols-2">
         {sources.map((s, i) => (
           <li key={i} className="flex items-center gap-2 text-xs text-slate-400">

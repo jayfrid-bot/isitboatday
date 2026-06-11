@@ -127,6 +127,18 @@ export function TideCurve({ events, tz }: { events: TideEvent[]; tz: string }) {
             strokeWidth="1.2"
             strokeDasharray="2 3"
           />
+          {/* Soft breathing halo behind the marker (disabled for reduced-motion). */}
+          <circle
+            className="now-pulse"
+            cx={xFor(now)}
+            cy={yFor(heightAt(now))}
+            r="4.5"
+            fill="#fbbf24"
+            style={{
+              transformOrigin: `${xFor(now).toFixed(1)}px ${yFor(heightAt(now)).toFixed(1)}px`,
+              animation: "nowpulse 2.6s ease-in-out infinite",
+            }}
+          />
           <circle
             cx={xFor(now)}
             cy={yFor(heightAt(now))}

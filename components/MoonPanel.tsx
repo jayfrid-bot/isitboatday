@@ -24,9 +24,9 @@ export function MoonPanel({ sun }: { sun: Wrapped<SunData> }) {
   const moon = sun.data?.moonPhase;
 
   return (
-    <div className="rounded-2xl bg-slate-900/70 p-4 ring-1 ring-white/10">
+    <div className="rounded-2xl bg-slate-900/60 p-4 ring-1 ring-white/10 backdrop-blur">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm text-slate-400">
+        <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-slate-400">
           <span aria-hidden>{moon?.emoji ?? "🌙"}</span>
           <span>Moon</span>
         </div>

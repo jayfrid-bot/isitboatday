@@ -7,6 +7,7 @@ import { bestBoatWindow, deriveMetrics } from "@/lib/score";
 import { boatDayVerdict, fmtDate, fmtTime, scoreColor } from "@/lib/format";
 import { mphToKnots, round } from "@/lib/util";
 import { Logo } from "@/components/Logo";
+import { HeroWaves } from "@/components/HeroWaves";
 import { ScoreGauge } from "@/components/ScoreGauge";
 import { ScoreBreakdown } from "@/components/ScoreBreakdown";
 import { HourlyScoreGraph } from "@/components/HourlyScoreGraph";
@@ -94,7 +95,7 @@ export function ConditionsDashboard({
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
-      <header className="mb-6">
+      <header className="mb-5">
         <Link
           href="/"
           className="inline-flex min-h-[36px] items-center text-sm hover:opacity-80"
@@ -102,51 +103,66 @@ export function ConditionsDashboard({
         >
           <Logo markSize={28} />
         </Link>
-        <h1 className="mt-2 text-3xl font-bold text-white sm:text-4xl">
-          {snap.location.name}
-        </h1>
-        <p className="text-slate-400">{snap.location.region}</p>
       </header>
+
+      {/* Hero verdict panel — the instrument-cluster headline. A dawn-over-water
+          gradient carries the location, the one-line verdict, and the gauge,
+          with a drifting layered wave divider seating it into the page. */}
+      <section className="relative mb-6 overflow-hidden rounded-3xl bg-dawn-hero ring-1 ring-white/10">
+        <div className="relative z-10 px-5 pb-20 pt-6 sm:px-8 sm:pb-24 sm:pt-8">
+          <h1 className="text-3xl font-bold text-white sm:text-4xl">
+            {snap.location.name}
+          </h1>
+          <p className="text-ocean-200/80">{snap.location.region}</p>
+
+          <div className="mt-6 flex flex-col items-center gap-6 sm:mt-8 sm:flex-row sm:items-center sm:justify-between sm:gap-8">
+            <div className="text-center sm:text-left">
+              <div className="text-xs uppercase tracking-widest text-ocean-200/70">
+                Is it boat day?
+              </div>
+              <div
+                className="mt-1 text-3xl font-bold leading-tight sm:text-4xl"
+                style={{ color: scoreColor(active.score) }}
+              >
+                {boatDayVerdict(active.score)}
+              </div>
+            </div>
+            <div className="shrink-0">
+              <ScoreGauge
+                score={active.score}
+                rating={active.rating}
+                label="Boat Day score"
+                accent={scoreColor(active.score)}
+              />
+            </div>
+          </div>
+        </div>
+        <HeroWaves />
+      </section>
 
       <div className="mb-6">
         <SafetyBanner nws={snap.nws} lightning={snap.lightning} />
       </div>
 
-      <section className="mb-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-        <div className="flex flex-col items-center gap-4 rounded-2xl bg-slate-900/70 p-6 ring-1 ring-white/10">
-          <div className="text-center">
-            <div className="text-xs uppercase tracking-widest text-slate-500">
-              Is it boat day?
-            </div>
-            <div
-              className="text-2xl font-bold"
-              style={{ color: scoreColor(active.score) }}
-            >
-              {boatDayVerdict(active.score)}
-            </div>
-          </div>
-          <ScoreGauge
-            score={active.score}
-            rating={active.rating}
-            label="Boat Day score"
-            accent={scoreColor(active.score)}
-          />
-        </div>
+      <section className="mb-6">
         <ScoreBreakdown result={active} />
       </section>
 
       {nc || bw ? (
         <section className="mb-4 flex flex-wrap gap-2 text-sm">
           {nc ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-800/70 px-3 py-1 text-slate-200 ring-1 ring-white/10">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-900/60 px-3 py-1 text-slate-200 ring-1 ring-white/10 backdrop-blur">
               <span aria-hidden>{nc.state === "raining" ? "🌧️" : "☀️"}</span>
               {nc.text}
             </span>
           ) : null}
           {bw ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-800/70 px-3 py-1 text-slate-200 ring-1 ring-white/10">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 font-medium text-emerald-200 ring-1 ring-emerald-400/20 backdrop-blur">
               <span aria-hidden>⭐</span>
-              Best window today: {fmtTime(bw.startIso, tz)}–{fmtTime(bw.endIso, tz)}
+              Best window today:{" "}
+              <span className="tabular-nums">
+                {fmtTime(bw.startIso, tz)}–{fmtTime(bw.endIso, tz)}
+              </span>
             </span>
           ) : null}
         </section>
@@ -158,22 +174,31 @@ export function ConditionsDashboard({
 
       <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {/* Wind — the hero card, knots first. Spans two columns to give it weight. */}
-        <div className="col-span-2 rounded-2xl bg-slate-900/70 p-4 ring-1 ring-white/10">
-          <div className="flex items-center gap-2 text-sm text-slate-400">
+        <div className="col-span-2 rounded-2xl bg-slate-900/60 p-4 ring-1 ring-white/10 backdrop-blur transition-transform duration-200 hover:-translate-y-0.5 hover:ring-white/20">
+          <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-slate-400">
             <span aria-hidden>💨</span>
             <span>Wind</span>
           </div>
-          <div className="mt-2 flex items-center gap-3">
+          <div className="mt-2 flex items-center gap-4">
             <WindCompass fromDeg={d.windDirDeg} speedMph={d.windSpeedMph} />
-            <div>
-              <div className="text-2xl font-semibold text-white sm:text-3xl">
-                {windKn != null ? `${windKn} kn` : "—"}
+            <div className="min-w-0">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-4xl font-bold tabular-nums leading-none text-white sm:text-5xl">
+                  {windKn != null ? windKn : "—"}
+                </span>
+                {windKn != null ? (
+                  <span className="text-base font-medium text-slate-400">kn</span>
+                ) : null}
               </div>
               {d.windSpeedMph != null ? (
-                <div className="text-xs text-slate-400">{d.windSpeedMph} mph</div>
+                <div className="mt-1 text-xs tabular-nums text-slate-400">
+                  {d.windSpeedMph} mph
+                </div>
               ) : null}
               {gustKn != null ? (
-                <div className="text-xs text-slate-400">gusts {gustKn} kn</div>
+                <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-slate-800/70 px-2 py-0.5 text-xs font-medium tabular-nums text-ocean-200 ring-1 ring-white/10">
+                  gusts {gustKn} kn
+                </div>
               ) : null}
             </div>
           </div>
@@ -290,7 +315,7 @@ export function ConditionsDashboard({
         <CamGrid cams={cams} tz={tz} />
       </section>
 
-      <footer className="space-y-3">
+      <footer className="space-y-3 border-t border-white/5 pt-6">
         <SourceList sources={sources} />
         <p className="text-center text-xs text-slate-500">
           Scores are an automated estimate for general guidance only — not a

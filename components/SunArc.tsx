@@ -100,7 +100,19 @@ export function SunArc({ sun, tz }: { sun: SunData; tz: string }) {
         {/* the sun, where we are right now */}
         {sunPos ? (
           <g>
-            {daylight ? <circle cx={sunPos.x} cy={sunPos.y} r="16" fill="url(#sunarc-glow)" /> : null}
+            {daylight ? (
+              <circle
+                className="now-pulse"
+                cx={sunPos.x}
+                cy={sunPos.y}
+                r="16"
+                fill="url(#sunarc-glow)"
+                style={{
+                  transformOrigin: `${sunPos.x.toFixed(1)}px ${sunPos.y.toFixed(1)}px`,
+                  animation: "nowpulse 3.4s ease-in-out infinite",
+                }}
+              />
+            ) : null}
             <circle
               cx={sunPos.x}
               cy={sunPos.y}

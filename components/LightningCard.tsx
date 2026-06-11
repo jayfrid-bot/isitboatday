@@ -15,7 +15,7 @@ export function LightningCard({ lightning }: { lightning: Wrapped<LightningData>
 
   // Resolve a tone + headline from the data.
   let ring = "ring-white/10";
-  let bg = "bg-slate-900/70";
+  let bg = "bg-slate-900/60";
   let accent = "#94a3b8";
   let headline: string;
   let sub: string | null = null;
@@ -44,12 +44,12 @@ export function LightningCard({ lightning }: { lightning: Wrapped<LightningData>
   }
 
   return (
-    <div className={`rounded-2xl ${bg} p-4 ring-1 ${ring}`}>
-      <div className="flex items-center gap-2 text-sm text-slate-400">
+    <div className={`rounded-2xl ${bg} p-4 ring-1 ${ring} backdrop-blur`}>
+      <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-slate-400">
         <span aria-hidden>⚡</span>
         <span>Lightning — nearest strike</span>
       </div>
-      <div className="mt-1 text-xl font-semibold sm:text-2xl" style={{ color: accent }}>
+      <div className="mt-1 text-xl font-semibold tabular-nums sm:text-2xl" style={{ color: accent }}>
         {headline}
       </div>
       {sub ? <div className="mt-0.5 break-words text-xs text-slate-400">{sub}</div> : null}

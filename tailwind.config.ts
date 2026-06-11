@@ -32,6 +32,14 @@ const config: Config = {
           900: "#081626",
         },
       },
+      backgroundImage: {
+        // "Dawn over water": deep indigo top, a teal horizon glow lower-left,
+        // grounding to the abyss base. Shared by the dashboard + town-list heroes
+        // so the gradient is defined in exactly one place.
+        "dawn-hero":
+          "radial-gradient(120% 90% at 15% 105%, rgba(50,164,255,0.22), transparent 55%)," +
+          "linear-gradient(165deg, #0b1f3a 0%, #0e2038 45%, #081626 100%)",
+      },
     },
   },
   plugins: [],

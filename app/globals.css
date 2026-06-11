@@ -18,9 +18,39 @@
   to { transform: rotate(var(--wobble, 0deg)); }
 }
 
+/* Slow horizontal drift for the hero wave divider. Each wave layer sets its own
+   distance via --drift so the three layers slide at different rates (parallax). */
+@keyframes wavedrift {
+  from { transform: translateX(0); }
+  to { transform: translateX(var(--drift, -40px)); }
+}
+
+/* Gentle breathing pulse for "now" marker halos on the tide/sun curves. Used on
+   a halo element behind the solid dot, so it reads as a soft ripple. */
+@keyframes nowpulse {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 0.25; transform: scale(1.55); }
+}
+
+/* The hero gauge ring sweeps from empty to its score on load. The element sets
+   its full-circle length in --circ; the transition on stroke-dashoffset does
+   the animating (see ScoreGauge). */
+.gauge-glow {
+  filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.35));
+}
+
 body {
   background:
     radial-gradient(900px 450px at 50% -16%, rgba(251, 191, 36, 0.07), transparent 55%),
     radial-gradient(1200px 600px at 50% -10%, rgba(27, 133, 245, 0.18), transparent 60%),
     #020617;
+}
+
+/* Honor the OS "reduce motion" setting: kill the ambient drifts/pulses but keep
+   functional one-shot transitions (the gauge sweep still reads as "settling"). */
+@media (prefers-reduced-motion: reduce) {
+  .wave-layer,
+  .now-pulse {
+    animation: none !important;
+  }
 }
