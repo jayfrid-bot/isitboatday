@@ -1,10 +1,12 @@
 import type {
   BestWindow,
+  BoatTrafficLevel,
   ConditionsSnapshot,
   HourlyScore,
   ScoreResult,
   SubScore,
 } from "@/lib/types";
+import { predictTraffic } from "@/lib/sources/boatTraffic";
 import { clamp, degToCardinal, dewPointFromTempRH, mphToKnots, plateau, round } from "@/lib/util";
 
 // Consolidated, best-available values pulled across all sources. Wind/seas/storms
@@ -26,6 +28,8 @@ export interface Derived {
   dewPointF?: number; // °F — the comfort/mugginess driver
   visibilityMi?: number; // horizontal visibility (miles) — fog is a navigation hazard
   tideTrend?: "rising" | "falling"; // incoming vs outgoing — drives the inlet sub-score
+  boatTrafficLevel?: BoatTrafficLevel; // how crowded the water is — emptier scores higher
+  boatTrafficDisplay?: string; // e.g. "busy · ~14 boats (cams)" or "moderate (typical)"
   // --- safety flags (drive the hard caps) ---
   /** Small Craft Advisory active in the offshore marine zone. */
   smallCraftAdvisory: boolean;
@@ -92,6 +96,8 @@ export function deriveMetrics(s: ConditionsSnapshot): Derived {
     // current-conditions field).
     visibilityMi: w?.visibilityMi ?? hourlyVisibilityNow(s),
     tideTrend: s.tides.data?.trend,
+    boatTrafficLevel: s.boatTraffic.data?.level,
+    boatTrafficDisplay: boatTrafficDisplay(s),
     smallCraftAdvisory: anyMarine(SMALL_CRAFT_ADVISORY),
     specialMarineWarning: anyMarine(SPECIAL_MARINE_WARNING),
     severeMarineWarning: anyMarine(SEVERE_MARINE),
@@ -341,6 +347,34 @@ function tideScore(d: Derived): { score: number | null; display?: string } {
   return { score: null };
 }
 
+/**
+ * On-the-water traffic sub-score: emptier water is a better boat day (mirrors how
+ * beach crowds are scored). quiet 100 / light 90 / moderate 70 / busy 45 /
+ * packed 25; unknown drops out of the average (null).
+ */
+const BOAT_TRAFFIC_SCORES: Record<BoatTrafficLevel, number | null> = {
+  quiet: 100,
+  light: 90,
+  moderate: 70,
+  busy: 45,
+  packed: 25,
+  unknown: null,
+};
+function boatTrafficScore(level: BoatTrafficLevel | undefined): number | null {
+  if (level == null) return null;
+  return BOAT_TRAFFIC_SCORES[level];
+}
+
+/** "busy · ~14 boats (cams)" or "moderate (typical)" — from the snapshot's boat-traffic read. */
+function boatTrafficDisplay(s: ConditionsSnapshot): string | undefined {
+  const bt = s.boatTraffic.data;
+  if (!bt) return undefined;
+  let out: string = bt.level;
+  if (typeof bt.boats === "number") out += ` · ~${bt.boats} boats`;
+  out += bt.source === "cams" ? " (cams)" : " (typical)";
+  return out;
+}
+
 // --- combination + caps ----------------------------------------------------
 function combine(subs: SubScore[]): number {
   const avail = subs.filter((s) => s.score != null);
@@ -376,13 +410,13 @@ export function scoreBoatDay(d: Derived): ScoreResult {
   const subs: SubScore[] = [
     sub("wind", "Wind", windScore(d), 0.24, windDisplay(d)),
     sub("seas", "Seas (height & period)", seasScore(d), 0.22, seasDisplay(d)),
-    sub("storms", "Storms & rain", stormsScore(d), 0.18, stormsDisplay(d)),
-    sub("visibility", "Visibility", visibilityScore(d.visibilityMi), 0.08, f1(d.visibilityMi, " mi")),
+    sub("storms", "Storms & rain", stormsScore(d), 0.17, stormsDisplay(d)),
+    sub("visibility", "Visibility", visibilityScore(d.visibilityMi), 0.07, f1(d.visibilityMi, " mi")),
     sub(
       "airTemp",
       "Air temperature",
       d.airTempF != null ? plateau(d.airTempF, 72, 90, 20) : null,
-      0.08,
+      0.07,
       f1(d.airTempF, "°F"),
     ),
     sub("comfort", "Comfort (mugginess)", comfortScore(d), 0.06, comfortDisplay(d)),
@@ -395,10 +429,17 @@ export function scoreBoatDay(d: Derived): ScoreResult {
     ),
     sub("tide", "Tide & inlet", tide.score, 0.04, tide.display),
     sub(
+      "boatTraffic",
+      "On-the-water traffic",
+      boatTrafficScore(d.boatTrafficLevel),
+      0.04,
+      d.boatTrafficDisplay,
+    ),
+    sub(
       "uv",
       "UV index",
       d.uvIndex != null ? uvScore(d.uvIndex) : null,
-      0.04,
+      0.03,
       d.uvIndex != null ? `${d.uvIndex}` : undefined,
     ),
   ];
@@ -517,6 +558,10 @@ export function computeHourlyScores(s: ConditionsSnapshot): HourlyScore[] {
 
   // Day-constant inputs (seas, water temp, tide, alerts, lightning) reuse the snapshot.
   const base = deriveMetrics(s);
+  const tz = s.location.timezone;
+  // Typical boat traffic learned by local hour from the feed's history (when present).
+  const byHour = s.boatTraffic.data?.byHour;
+  const byHourMap = new Map(byHour?.map((b) => [b.hour, b]) ?? []);
   const sun = s.sun.data;
   const sunrise = sun?.sunrise ? new Date(sun.sunrise).getTime() : null;
   const sunset = sun?.sunset ? new Date(sun.sunset).getTime() : null;
@@ -529,6 +574,19 @@ export function computeHourlyScores(s: ConditionsSnapshot): HourlyScore[] {
       return t + HOUR_MS > sunrise && t <= sunset;
     })
     .map((h) => {
+      // Per-hour boat traffic: the learned by-hour level for this local hour when
+      // available, else the deterministic typical-traffic prediction for that hour.
+      const localHour = Number(
+        new Intl.DateTimeFormat("en-US", {
+          timeZone: tz,
+          hour: "2-digit",
+          hour12: false,
+        }).format(new Date(h.time)),
+      ) % 24;
+      const learned = byHourMap.get(localHour);
+      const hourTraffic: BoatTrafficLevel = learned
+        ? learned.level
+        : predictTraffic(new Date(h.time), tz).level;
       const d: Derived = {
         airTempF: h.airTempF,
         waterTempF: base.waterTempF,
@@ -546,6 +604,8 @@ export function computeHourlyScores(s: ConditionsSnapshot): HourlyScore[] {
         dewPointF: h.dewPointF,
         visibilityMi: h.visibilityMi,
         tideTrend: base.tideTrend,
+        boatTrafficLevel: hourTraffic,
+        boatTrafficDisplay: base.boatTrafficDisplay,
         smallCraftAdvisory: base.smallCraftAdvisory,
         specialMarineWarning: base.specialMarineWarning,
         severeMarineWarning: base.severeMarineWarning,

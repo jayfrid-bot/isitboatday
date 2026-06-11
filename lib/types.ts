@@ -227,6 +227,31 @@ export interface TrafficData {
   segments: number;
 }
 
+// --- On-the-water boat traffic (Inlet & Lake Boca cams + AI vision) --------
+// How crowded the WATER itself is (boats), distinct from the road-congestion
+// `traffic` field above. A scheduled cam-vision job counts boats on the webcams
+// and publishes a feed; when no fresh observation exists we fall back to a
+// deterministic typical-traffic calendar model. Emptier water = better boat day.
+export type BoatTrafficLevel = "quiet" | "light" | "moderate" | "busy" | "packed" | "unknown";
+
+export interface BoatTrafficByHour {
+  hour: number;
+  level: BoatTrafficLevel;
+  boats?: number;
+  samples: number;
+}
+
+export interface BoatTrafficData {
+  level: BoatTrafficLevel;
+  boats?: number;
+  underway?: number;
+  anchored?: number;
+  source: "cams" | "typical";
+  note?: string;
+  capturedAtLocal?: string;
+  byHour?: BoatTrafficByHour[];
+}
+
 // --- Snapshot --------------------------------------------------------------
 export interface ConditionsSnapshot {
   location: LocationPublic;
@@ -239,6 +264,8 @@ export interface ConditionsSnapshot {
   nws: Wrapped<NwsData>;
   lightning: Wrapped<LightningData>;
   traffic: Wrapped<TrafficData>;
+  /** On-the-water boat traffic — how crowded the water is (distinct from road `traffic`). */
+  boatTraffic: Wrapped<BoatTrafficData>;
   forecast: Wrapped<ForecastDay[]>;
   sun: Wrapped<SunData>;
   hourly: Wrapped<HourlyMetrics[]>;

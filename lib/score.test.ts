@@ -8,6 +8,7 @@ import {
   scoreBoatDay,
 } from "@/lib/score";
 import type {
+  BoatTrafficData,
   BuoyData,
   ConditionsSnapshot,
   ForecastDay,
@@ -42,6 +43,7 @@ function snapshot(over: {
   tides?: TideData | null;
   nws?: NwsData | null;
   lightning?: LightningData | null;
+  boatTraffic?: BoatTrafficData | null;
   sun?: SunData | null;
   hourly?: HourlyMetrics[] | null;
 }): ConditionsSnapshot {
@@ -63,6 +65,7 @@ function snapshot(over: {
     nws: wrap(over.nws ?? null),
     lightning: wrap(over.lightning ?? null),
     traffic: wrap<TrafficData>(null),
+    boatTraffic: wrap(over.boatTraffic ?? null),
     forecast: wrap<ForecastDay[]>(null),
     sun: wrap(over.sun ?? null),
     hourly: wrap(over.hourly ?? null),
@@ -165,14 +168,50 @@ describe("deriveMetrics", () => {
 });
 
 describe("Boat Day scoring", () => {
-  it("uses the boating sub-scores whose weights sum to 1", () => {
+  it("uses the boating sub-scores whose weights sum to exactly 1.00", () => {
     const { subScores } = computeScore(PERFECT);
     const keys = subScores.map((s) => s.key).sort();
     expect(keys).toEqual(
-      ["airTemp", "comfort", "seas", "storms", "tide", "uv", "visibility", "waterTemp", "wind"].sort(),
+      [
+        "airTemp",
+        "boatTraffic",
+        "comfort",
+        "seas",
+        "storms",
+        "tide",
+        "uv",
+        "visibility",
+        "waterTemp",
+        "wind",
+      ].sort(),
     );
     const total = subScores.reduce((a, s) => a + s.weight, 0);
-    expect(total).toBeCloseTo(1, 5);
+    expect(total).toBeCloseTo(1, 10);
+  });
+
+  it("scores on-the-water traffic by level (emptier = better), unknown drops out", () => {
+    const traffic = (level: BoatTrafficData["level"]) =>
+      scoreBoatDay(
+        deriveMetrics(snapshot({ boatTraffic: { level, source: "typical" } })),
+      ).subScores.find((s) => s.key === "boatTraffic")!.score;
+    expect(traffic("quiet")).toBe(100);
+    expect(traffic("light")).toBe(90);
+    expect(traffic("moderate")).toBe(70);
+    expect(traffic("busy")).toBe(45);
+    expect(traffic("packed")).toBe(25);
+    // unknown -> null so it falls out of the weighted average.
+    expect(traffic("unknown")).toBeNull();
+  });
+
+  it("formats the boat-traffic display from cams vs the typical model", () => {
+    const cams = deriveMetrics(
+      snapshot({ boatTraffic: { level: "busy", boats: 14, source: "cams" } }),
+    );
+    expect(cams.boatTrafficDisplay).toBe("busy · ~14 boats (cams)");
+    const typical = deriveMetrics(
+      snapshot({ boatTraffic: { level: "moderate", source: "typical" } }),
+    );
+    expect(typical.boatTrafficDisplay).toBe("moderate (typical)");
   });
 
   it("gives a glass-calm perfect morning an Excellent score with no caps", () => {

@@ -1,6 +1,7 @@
 import { getLocation, toPublicLocation } from "@/config/locations";
 import type { ConditionsResponse, ConditionsSnapshot } from "@/lib/types";
 import { buildCamViews } from "@/lib/cams";
+import { fetchBoatTraffic } from "@/lib/sources/boatTraffic";
 import { fetchBuoy } from "@/lib/sources/buoy";
 import { fetchForecast } from "@/lib/sources/forecast";
 import { fetchHourlyForecast } from "@/lib/sources/hourlyForecast";
@@ -35,6 +36,7 @@ export async function getSnapshot(
     nws,
     lightning,
     traffic,
+    boatTraffic,
     forecast,
     hourly,
   ] = await Promise.all([
@@ -46,6 +48,7 @@ export async function getSnapshot(
     fetchNws(loc),
     fetchLightning(loc),
     fetchTraffic(loc),
+    fetchBoatTraffic(loc),
     fetchForecast(loc),
     fetchHourlyForecast(loc),
   ]);
@@ -61,6 +64,7 @@ export async function getSnapshot(
     nws,
     lightning,
     traffic,
+    boatTraffic,
     forecast,
     sun: fetchSun(loc),
     hourly,

@@ -1,0 +1,70 @@
+name: Boat Traffic Cam Vision
+
+# Counts boats on the water from the Boca Inlet + Lake Boca cams with a free
+# vision model and publishes boat_traffic.json to the `boat-traffic-data` branch
+# (NOT main), so the AI calls run here on free public-repo Actions and never
+# touch Netlify. The web app reads the published file via raw.githubusercontent.
+#
+# Zero-secrets default: the script leads with GitHub Models, which authenticates
+# with the job's own GITHUB_TOKEN (see `permissions: models: read` below) — no
+# API key to manage. Other providers light up only if their secrets are added.
+
+on:
+  schedule:
+    # Capture across boating hours (~7 AM-7 PM ET) to build the by-hour pattern.
+    - cron: "0 11,13,15,17,19,21,23 * * *" # ~7,9,11 AM,1,3,5,7 PM ET
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/boat-traffic.yml"
+      - "scripts/boat_traffic.py"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  models: read # lets the job's GITHUB_TOKEN call GitHub Models (zero-secrets default)
+
+concurrency:
+  group: boat-traffic
+  cancel-in-progress: true
+
+jobs:
+  build-feed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12  # headroom for per-cam spacing + retry backoff
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Count boats on the water from the cams (free vision, with fallback)
+        # Falls through providers in order until one answers; no-op if none configured.
+        run: python scripts/boat_traffic.py
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # GitHub Models default (no signup)
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }} # optional free fallback
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }} # optional free fallback (14.4k/day)
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }} # optional free fallback
+          BOAT_TRAFFIC_OUT: ${{ runner.temp }}/boat_traffic.json
+
+      - name: Publish to boat-traffic-data branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          feed="${{ runner.temp }}/boat_traffic.json"
+          if [ ! -f "$feed" ]; then
+            echo "no feed written (no fresh readings and no prior good data) — leaving last good boat-traffic-data in place"
+            exit 0
+          fi
+          work="${{ runner.temp }}/pub"
+          mkdir -p "$work"
+          cp "$feed" "$work/boat_traffic.json"
+          cd "$work"
+          git init -q
+          git config user.name "boat-traffic-bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -q -b boat-traffic-data
+          git add -A
+          git commit -q -m "Boat traffic cam vision feed $(date -u +%FT%TZ)"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" boat-traffic-data

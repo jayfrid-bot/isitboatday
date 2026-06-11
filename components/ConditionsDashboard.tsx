@@ -68,6 +68,7 @@ export function ConditionsDashboard({
   const tz = snap.location.timezone;
   const cams = res.cams;
   const traffic = snap.traffic.data;
+  const boats = snap.boatTraffic.data; // on-the-water boat traffic (cams or typical model)
   const nc = snap.nowcast.data;
   const bw = bestBoatWindow(res.hourlyScores);
   const uvBurn =
@@ -88,6 +89,7 @@ export function ConditionsDashboard({
     snap.nws,
     snap.lightning,
     snap.traffic,
+    snap.boatTraffic,
     snap.forecast,
     snap.sun,
     snap.hourly,
@@ -273,6 +275,28 @@ export function ConditionsDashboard({
                 : d.cloudCoverPct <= 60
                   ? "partly cloudy"
                   : "overcast"
+              : undefined
+          }
+        />
+        <MetricCard
+          icon="🛥️"
+          label="On the water"
+          value={!boats || boats.level === "unknown" ? "—" : cap(boats.level)}
+          sub={
+            boats && boats.level !== "unknown"
+              ? boats.source === "cams"
+                ? // Live cam count. Build "~N boats on the cams · M anchored",
+                  // dropping either half gracefully when its number is missing.
+                  [
+                    boats.boats != null
+                      ? `~${boats.boats} boat${boats.boats === 1 ? "" : "s"} on the cams`
+                      : undefined,
+                    boats.anchored != null ? `${boats.anchored} anchored` : undefined,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ") || undefined
+                : // Typical-pattern fallback — show the calendar model's own phrasing.
+                  boats.note
               : undefined
           }
         />

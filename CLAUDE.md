@@ -10,10 +10,15 @@ scale from Boca Raton to every boating town.
 - `lib/types.ts` — shared domain types; every source returns `Wrapped<T>` with a status.
 - `lib/sources/*` — one adapter per data source. **Each must catch its own errors and
   return a `Wrapped<T>` (never throw to the UI).** Pure parsers (`parseNdbcRealtime`,
-  `parseNoaaPredictions`, etc.) are split out and unit-tested.
+  `parseNoaaPredictions`, etc.) are split out and unit-tested. On-the-water **boat
+  traffic** is one of these: it reads a cam-vision JSON feed (published by a scheduled
+  GitHub Actions job to the `boat-traffic-data` branch) and falls back to a deterministic
+  typical-by-hour model — distinct from the existing road `traffic` field.
 - `lib/conditions.ts` — fetches all sources in parallel and assembles the snapshot.
 - `lib/score.ts` — `deriveMetrics` consolidates best-available values; `computeScores`
-  produces the Boat Day score with sub-score breakdowns and hard safety caps.
+  produces the Boat Day score with sub-score breakdowns and hard safety caps (inputs
+  include on-water `boatTraffic` as a small 0.04-weight sub-score — emptier water scores
+  higher).
 - `app/api/conditions/[slug]/route.ts` — cached JSON API and the data the pages use.
 - `components/ConditionsDashboard.tsx` — client shell (SWR polling, dashboard layout).
 

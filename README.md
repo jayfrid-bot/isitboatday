@@ -20,6 +20,10 @@ single entry — the long-term goal is *every* boating town.
 - **Lightning** — nearest strike + recency from NOAA GOES GLM (a reason to stay docked)
 - **Visibility** — fog is a navigation hazard (Open-Meteo)
 - **Air & water temp, humidity, dew point, UV, cloud cover, rain chance** — NWS + Open-Meteo
+- **On the water** — how busy the water actually is, counted from the Boca Inlet +
+  Lake Boca cams by a scheduled GitHub Actions vision job (boats per view → quiet /
+  light / moderate / busy / packed), with a calendar-based *typical-traffic* model as
+  fallback when there's no fresh cam read
 - **Ramp & marina traffic** — congestion near the waterfront (HERE Traffic, optional)
 - **Inlet & waterway cams** — check the inlet before you launch; each cam shows live
   weather & wind from Open-Meteo at its own coordinates
@@ -39,6 +43,7 @@ sum to 1.00; a missing input drops out of the weighted average):
 | Comfort (mugginess) | 6% | Dew-point curve |
 | Water temperature | 6% | Pleasant for a sandbar swim |
 | Tide & inlet | 4% | Incoming is friendly; ebb against an onshore east wind = steep inlet chop |
+| On-water traffic | 4% | Emptier water scores higher; packed raft-ups (counted from the cams, or a typical-by-hour estimate) nudge it down |
 | UV exposure | 4% | No shade on a boat |
 
 **Hard safety caps** (worst wins; each gets a plain-English explanation):
@@ -62,6 +67,30 @@ Ratings: **≥80 Excellent · ≥65 Good · ≥45 Fair · else Poor**. The verdi
 
 > The **NWS marine zone forecast** is the authoritative safety signal — the score
 > is guidance, the marine warnings are the rule.
+
+## On-the-water boat traffic
+
+How crowded the water is gets its own little pipeline, because no single API reports
+"how many boats are out right now." A scheduled **GitHub Actions** job grabs frames
+from the **Boca Inlet + Lake Boca** webcams and runs a vision model over them to count
+boats per view. Per-view counts map to a level — **0–1 quiet · 2–4 light · 5–9
+moderate · 10–19 busy · 20+ packed** — and the overall level is the *worst* cam (a Lake
+Boca raft-up dominates). The job publishes a small JSON feed to the dedicated
+`boat-traffic-data` branch, and the app reads it server-side like any other source.
+
+- **Zero API keys needed.** The vision step uses **free GitHub Models inference** with
+  the workflow's built-in token, so it works out of the box on a fork.
+- **Optional upgrades.** Adding `GEMINI_API_KEY`, `GROQ_API_KEY`, or
+  `OPENROUTER_API_KEY` as repo secrets upgrades the model fallback chain, but none are
+  required.
+- **Honest fallback.** When there's no fresh cam observation, the app falls back to a
+  deterministic **calendar-based "typical traffic" model** (busier on summer weekend
+  afternoons, quiet at dawn), learning typical-by-hour patterns from the feed's rolling
+  history. The dashboard card is explicit about which one you're seeing — a live cam
+  count or a typical-for-this-hour estimate.
+
+This feeds the small **0.04-weight on-water-traffic sub-score** above: emptier water
+scores higher, a packed inlet nudges the Boat Day score down.
 
 ## Tech
 
